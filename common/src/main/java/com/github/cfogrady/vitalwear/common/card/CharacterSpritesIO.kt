@@ -39,7 +39,7 @@ class CharacterSpritesIO(private val spriteFileIO: SpriteFileIO, private val spr
             Pair(RUN2, IDLE2),
             Pair(TRAIN1, IDLE1),
             Pair(TRAIN2, IDLE2),
-            Pair(ATTACK, IDLE2),
+            Pair(ATTACK, WALK1),
             Pair(DODGE, IDLE1),
             Pair(SPLASH, IDLE1),
         )

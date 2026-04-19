@@ -19,7 +19,7 @@ class StopBackgroundTrainingActivity : ComponentActivity() {
         val vitalBoxFactory = (application as VitalWearApp).vitalBoxFactory
         setContent {
             vitalBoxFactory.VitalBox {
-                bitmapScaler.ScaledBitmap(bitmap = background, contentDescription = "Background", alignment = Alignment.BottomCenter)
+                bitmapScaler.FullScreenBackground(bitmap = background, contentDescription = "Background")
                 backgroundTrainingScreenFactory.EndTraining(
                     context = applicationContext,
                     partner = partner,

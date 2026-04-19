@@ -1,6 +1,7 @@
 package com.github.cfogrady.vitalwear.main
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -21,13 +22,22 @@ fun InitialScreen(
     val characterLoadingDone by controller.characterLoadingDone.collectAsStateWithLifecycle()
     val backgroundLoaded by controller.backgroundLoaded.collectAsStateWithLifecycle()
 
-    if(firmwareState == FirmwareManager.FirmwareState.Missing) {
-        controller.activityLaunchers.firmwareLoadingLauncher.invoke()
-    } else if(!characterLoadingDone || firmwareState == FirmwareManager.FirmwareState.Loading || !backgroundLoaded) {
-        Timber.i("Loading in mainScreen")
-        Timber.i("Character Manager Initialized: $characterLoadingDone")
-        Timber.i("Firmware Manager Initialized: $firmwareState")
-        Timber.i("Background Initialized: $backgroundLoaded")
+    LaunchedEffect(firmwareState) {
+        if (firmwareState == FirmwareManager.FirmwareState.Missing) {
+            controller.activityLaunchers.firmwareLoadingLauncher.invoke()
+        }
+    }
+
+    LaunchedEffect(characterLoadingDone, firmwareState, backgroundLoaded) {
+        if (!characterLoadingDone || firmwareState == FirmwareManager.FirmwareState.Loading || !backgroundLoaded) {
+            Timber.i("Loading in mainScreen")
+            Timber.i("Character Manager Initialized: $characterLoadingDone")
+            Timber.i("Firmware Manager Initialized: $firmwareState")
+            Timber.i("Background Initialized: $backgroundLoaded")
+        }
+    }
+
+    if(!characterLoadingDone || firmwareState == FirmwareManager.FirmwareState.Loading || !backgroundLoaded) {
         Loading(loadingText = "Initializing") {}
     } else {
         GameStateScreen(controller)

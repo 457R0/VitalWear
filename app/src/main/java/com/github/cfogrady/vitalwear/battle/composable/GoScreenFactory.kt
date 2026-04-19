@@ -12,15 +12,17 @@ import androidx.compose.ui.unit.Dp
 import com.github.cfogrady.vitalwear.battle.data.PreBattleModel
 import com.github.cfogrady.vitalwear.composable.util.BitmapScaler
 import com.github.cfogrady.vitalwear.composable.util.PositionOffsetRatios
+import kotlinx.coroutines.delay
 
 class GoScreenFactory(val bitmapScaler: BitmapScaler, val backgroundHeight: Dp) {
     @Composable
     fun GoScreen(battleModel: PreBattleModel, finished: () -> Unit) {
-        bitmapScaler.ScaledBitmap(bitmap = battleModel.background, contentDescription = "Background")
+        bitmapScaler.FullScreenBackground(bitmap = battleModel.background, contentDescription = "Background")
         GoPartner(battleModel)
-        Handler(Looper.getMainLooper()!!).postDelayed({
+        LaunchedEffect(Unit) {
+            delay(500)
             finished.invoke()
-        }, 500)
+        }
     }
 
     @Composable

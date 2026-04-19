@@ -29,7 +29,7 @@ fun BackgroundTraining(
     val firmware = controller.firmware
     val background by controller.background.collectAsStateWithLifecycle()
     vitalBoxFactory.VitalBox {
-        bitmapScalingFactory.ScaledBitmap(bitmap = background, contentDescription = "Background", alignment = Alignment.BottomCenter)
+        bitmapScalingFactory.FullScreenBackground(bitmap = background, contentDescription = "Background")
         val pagerState = rememberPagerState(pageCount = {
             2
         })

@@ -39,7 +39,7 @@ class EndFightVitalsFactory(
                 onComplete.invoke()
             }, 1000)
         }
-        bitmapScaler.ScaledBitmap(bitmap = background, contentDescription = "Background")
+        bitmapScaler.FullScreenBackground(bitmap = background, contentDescription = "Background")
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(0.dp), modifier = Modifier.fillMaxWidth()) {
             EndFightVitalsText(text = formatNumber(postBattleModel.partnerCharacter.vitals(), 4))
             bitmapScaler.ScaledBitmap(bitmap = vitalsFilledSprites[idx], contentDescription = "Vital Range", modifier = Modifier.padding(top = backgroundHeight.times(.05f)))

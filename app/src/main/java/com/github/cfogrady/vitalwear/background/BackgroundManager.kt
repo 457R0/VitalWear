@@ -50,7 +50,13 @@ class BackgroundManager(private val cardSpritesIO: CardSpritesIO, private val sh
         loadBackground(context, BACKGROUND_IS_CARD, BACKGROUND_IDX, BACKGROUND_CARD_NAME) {
             _selectedBackground.value = it
         }
-        _battleBackgroundOption.value = BattleBackgroundType.valueOf(sharedPreferences.getString(BATTLE_BACKGROUND_OPTION, BattleBackgroundType.PartnerCard.name)!!)
+        val configuredBattleBackground = sharedPreferences.getString(BATTLE_BACKGROUND_OPTION, BattleBackgroundType.PartnerCard.name)
+        _battleBackgroundOption.value = try {
+            BattleBackgroundType.valueOf(configuredBattleBackground ?: BattleBackgroundType.PartnerCard.name)
+        } catch (e: IllegalArgumentException) {
+            Timber.w(e, "Invalid battle background preference, defaulting to PartnerCard")
+            BattleBackgroundType.PartnerCard
+        }
         if(_battleBackgroundOption.value == BattleBackgroundType.Static) {
             loadBackground(context, STATIC_BATTLE_BACKGROUND_IS_CARD, STATIC_BATTLE_BACKGROUND_IDX, STATIC_BATTLE_BACKGROUND_CARD_NAME) {
                 _staticBattleBackground.value = it
@@ -63,12 +69,24 @@ class BackgroundManager(private val cardSpritesIO: CardSpritesIO, private val sh
         val cardBackground = sharedPreferences.getBoolean(isCardStringKey, false)
         val backgroundIdx = sharedPreferences.getInt(indexKey, 0)
         if(!cardBackground) {
-            backgroundSetter.invoke(firmware.backgrounds[backgroundIdx])
+            val background = firmware.backgrounds.getOrNull(backgroundIdx)
+            if (background != null) {
+                backgroundSetter.invoke(background)
+            } else {
+                Timber.w("Invalid firmware background index: $backgroundIdx")
+                firmware.backgrounds.firstOrNull()?.let(backgroundSetter)
+            }
         } else {
             val cardName = sharedPreferences.getString(cardNameKey, null)
             if(cardName != null) {
                 val backgrounds = cardSpritesIO.loadCardBackgrounds(context, cardName)
-                backgroundSetter.invoke(backgrounds[backgroundIdx])
+                val background = backgrounds.getOrNull(backgroundIdx)
+                if (background != null) {
+                    backgroundSetter.invoke(background)
+                } else {
+                    Timber.w("Invalid card background index: $backgroundIdx for $cardName")
+                    backgrounds.firstOrNull()?.let(backgroundSetter)
+                }
             } else {
                 Timber.e("Attempting to load card background, but card background name is null!")
             }

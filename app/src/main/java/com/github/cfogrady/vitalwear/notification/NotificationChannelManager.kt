@@ -18,6 +18,8 @@ class NotificationChannelManager(private val notificationManager: NotificationMa
         const val BACKGROUND_TRAINING = 1
         const val BACKGROUND_ADVENTURE = 2
         const val ADVENTURE_BOSS = 3
+        const val CARD_IMPORT_PROGRESS_ID = 4
+        const val FIRMWARE_IMPORT_PROGRESS_ID = 5
     }
 
     private var genericNotificationId = 100
@@ -45,6 +47,26 @@ class NotificationChannelManager(private val notificationManager: NotificationMa
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+        notificationManager.notify(notificationId, builder.build())
+        return notificationId
+    }
+
+    fun sendProgressNotification(context: Context, title: String, percent: Int, notificationId: Int): Int {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+        val boundedPercent = percent.coerceIn(0, 100)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.complication_preview)
+            .setContentTitle(title)
+            .setContentText("$boundedPercent%")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setOnlyAlertOnce(true)
+            .setOngoing(boundedPercent < 100)
+            .setProgress(100, boundedPercent, false)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(false)
         notificationManager.notify(notificationId, builder.build())
         return notificationId
     }

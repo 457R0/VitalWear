@@ -28,7 +28,7 @@ class HPCompareFactory(val bitmapScaler: BitmapScaler, val backgroundHeight: Dp)
             }, 2000)
         }
         val direction = if(showPlayer) 1.0f else -1.0f
-        bitmapScaler.ScaledBitmap(bitmap = battleModel.background, contentDescription = "Background")
+        bitmapScaler.FullScreenBackground(bitmap = battleModel.background, contentDescription = "Background")
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             bitmapScaler.ScaledBitmap(bitmap = character(battleModel, showPlayer), contentDescription = "Model",
             modifier = Modifier.offset(y = backgroundHeight.times(PositionOffsetRatios.CHARACTER_OFFSET_FROM_BOTTOM))

@@ -7,6 +7,7 @@ import android.os.Looper
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +27,7 @@ import com.github.cfogrady.vitalwear.firmware.components.TransformationBitmaps
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class TransformationScreenFactory(
     private val characterManager: CharacterManager,
@@ -51,9 +53,22 @@ class TransformationScreenFactory(
 
     @Composable
     fun RunTransformation(context: Context, initialCharacter: VBCharacter, onFinish: () -> Unit) {
-        var character = initialCharacter
-        val transformation = character.popTransformationOption()!!
-        var transformationProgress by remember {
+        var character by remember(initialCharacter) { mutableStateOf(initialCharacter) }
+        val transformation = remember(initialCharacter) { initialCharacter.popTransformationOption() }
+        val coroutineScope = rememberCoroutineScope()
+        var confirmEvolution by remember { mutableStateOf(false) }
+        var applyingTransformation by remember { mutableStateOf(false) }
+        var transformationApplied by remember { mutableStateOf(false) }
+        var finished by remember { mutableStateOf(false) }
+
+        if (transformation == null) {
+            LaunchedEffect(initialCharacter) {
+                onFinish.invoke()
+            }
+            return
+        }
+
+        var transformationProgress by remember(transformation) {
             if(transformation.fusion)
                 mutableStateOf(TransformationState.FUSION_PAIR)
             else
@@ -61,36 +76,95 @@ class TransformationScreenFactory(
         }
 
         val firmware by firmwareManager.getFirmware().collectAsState()
-        val transformationBitmaps = firmware!!.transformationBitmaps
+        val transformationBitmaps = firmware?.transformationBitmaps
+        if (transformationBitmaps == null) {
+            Loading {}
+            return
+        }
+
         LaunchedEffect(key1 = transformation) {
             // assume we click back and need to setup the next check
             bemUpdater.setupTransformationChecker(character)
         }
 
-        vitalBoxFactory.VitalBox {
-            when(transformationProgress) {
-                TransformationState.FUSION_PAIR -> FusionPair(context, character, transformation as FusionTransformation, transformationBitmaps) {
-                    transformationProgress = TransformationState.NEW_CHARACTER
+        val finishOnce = {
+            if (!finished) {
+                finished = true
+                onFinish.invoke()
+            }
+        }
+
+        val executeTransformation: (Boolean) -> Unit = { finishImmediately ->
+            if (applyingTransformation) {
+                Unit
+            } else if (transformationApplied) {
+                if (finishImmediately) {
+                    finishOnce.invoke()
+                } else {
+                    transformationProgress = TransformationState.SPLASH
                 }
-                TransformationState.POWER_INCREASING -> PowerIncreasing(character, transformationBitmaps) {
-                    transformationProgress = TransformationState.NEW_CHARACTER
-                }
-                TransformationState.NEW_CHARACTER -> NewCharacter(
-                    firmwareSprites = transformationBitmaps
-                ) {
-                    CoroutineScope(Dispatchers.IO).launch {
-                        character = characterManager.doActiveCharacterTransformation(context, transformation)
+            } else {
+                applyingTransformation = true
+                coroutineScope.launch {
+                    character = withContext(Dispatchers.IO) {
+                        characterManager.doActiveCharacterTransformation(context, transformation)
+                    }
+                    transformationApplied = true
+                    applyingTransformation = false
+                    if (finishImmediately) {
+                        finishOnce.invoke()
+                    } else {
                         transformationProgress = TransformationState.SPLASH
                     }
                 }
-                TransformationState.SPLASH -> Splash(partner = character) {
-                    transformationProgress = TransformationState.LIGHT_OF_TRANSFORMATION
-                }
-                TransformationState.LIGHT_OF_TRANSFORMATION -> LightOfTransformation(
-                    partner = character,
-                    firmwareSprites = transformationBitmaps
-                ) {
-                    onFinish.invoke()
+            }
+        }
+
+        LaunchedEffect(confirmEvolution) {
+            if (confirmEvolution) {
+                executeTransformation(true)
+            }
+        }
+
+        vitalBoxFactory.VitalBox {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable {
+                        // Tap confirms the evolution and skips the rest of the animation sequence.
+                        confirmEvolution = true
+                    }
+            ) {
+                when(transformationProgress) {
+                    TransformationState.FUSION_PAIR -> {
+                        val fusionTransformation = transformation as? FusionTransformation
+                        if (fusionTransformation == null) {
+                            LaunchedEffect(transformation) {
+                                finishOnce.invoke()
+                            }
+                        } else {
+                            FusionPair(context, character, fusionTransformation, transformationBitmaps) {
+                                transformationProgress = TransformationState.NEW_CHARACTER
+                            }
+                        }
+                    }
+                    TransformationState.POWER_INCREASING -> PowerIncreasing(character, transformationBitmaps) {
+                        transformationProgress = TransformationState.NEW_CHARACTER
+                    }
+                    TransformationState.NEW_CHARACTER -> NewCharacter(
+                        firmwareSprites = transformationBitmaps
+                    ) {
+                        executeTransformation(confirmEvolution)
+                    }
+                    TransformationState.SPLASH -> Splash(partner = character) {
+                        transformationProgress = TransformationState.LIGHT_OF_TRANSFORMATION
+                    }
+                    TransformationState.LIGHT_OF_TRANSFORMATION -> LightOfTransformation(
+                        partner = character,
+                        firmwareSprites = transformationBitmaps
+                    ) {
+                        finishOnce.invoke()
+                    }
                 }
             }
         }

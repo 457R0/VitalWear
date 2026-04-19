@@ -17,6 +17,7 @@ import com.github.cfogrady.vitalwear.battle.data.PreBattleModel
 import com.github.cfogrady.vitalwear.composable.util.BitmapScaler
 import com.github.cfogrady.vitalwear.composable.util.PositionOffsetRatios
 import com.google.common.collect.Lists
+import kotlinx.coroutines.delay
 import timber.log.Timber
 
 class ReadyScreenFactory(val bitmapScaler: BitmapScaler, val backgroundHeight: Dp) {
@@ -29,19 +30,21 @@ class ReadyScreenFactory(val bitmapScaler: BitmapScaler, val backgroundHeight: D
             leftScreenEarly = true
             stateUpdater.invoke(FightTargetState.END_FIGHT)
         }
-        bitmapScaler.ScaledBitmap(bitmap = battleModel.background, contentDescription = "Background")
+        bitmapScaler.FullScreenBackground(bitmap = battleModel.background, contentDescription = "Background")
         if(onOpponent) {
             Ready(battleModel.opponent, battleModel.readySprite, -1.0f)
-            Handler(Looper.getMainLooper()!!).postDelayed({
+            LaunchedEffect(Unit) {
+                delay(2000)
                 onOpponent = false
-            }, 2000)
+            }
         } else {
             Ready(battleModel.partnerCharacter, battleModel.readySprite, 1.0f)
-            Handler(Looper.getMainLooper()!!).postDelayed({
+            LaunchedEffect(Unit) {
+                delay(2500)
                 if(!leftScreenEarly) {
                     stateUpdater.invoke(FightTargetState.GO)
                 }
-            }, 2500)
+            }
         }
     }
 

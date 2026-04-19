@@ -1,7 +1,9 @@
 package com.github.cfogrady.vitalwear.communication
 
+import android.content.Intent
 import android.net.Uri
 import com.github.cfogrady.vitalwear.VitalWearApp
+import com.github.cfogrady.vitalwear.card.LoadCardActivity
 import com.github.cfogrady.vitalwear.common.communication.ChannelTypes
 import com.github.cfogrady.vitalwear.common.log.TinyLogTree
 import com.google.android.gms.wearable.ChannelClient
@@ -36,8 +38,18 @@ class PhoneCommunicationService  : WearableListenerService() {
         super.onChannelOpened(channel)
         when(channel.path) {
             ChannelTypes.CARD_DATA -> {
+                val cardReceiver = (application as VitalWearApp).cardReceiver
+                cardReceiver.prepareForIncomingImport()
+                runCatching {
+                    val loadCardIntent = Intent(applicationContext, LoadCardActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    applicationContext.startActivity(loadCardIntent)
+                }.onFailure {
+                    Timber.w(it, "Unable to launch card import progress activity")
+                }
                 CoroutineScope(Dispatchers.IO).launch {
-                    val result = (application as VitalWearApp).cardReceiver.importCardFromChannel(applicationContext, channel)
+                    val result = cardReceiver.importCardFromChannel(applicationContext, channel)
                     val notificationChannelManager = (application as VitalWearApp).notificationChannelManager
                     if(result.success) {
                         notificationChannelManager.sendGenericNotification(applicationContext, "${result.cardName} Import Successful", "")

@@ -53,7 +53,7 @@ class TrainingScreenFactory(private val vitalBoxFactory: VitalBoxFactory,
         var trainingResult by remember { mutableStateOf(TrainingResult.FAIL) }
         var statIncease by remember { mutableStateOf(TrainingStatChanges(trainingType.affectedStat, 0)) }
         vitalBoxFactory.VitalBox {
-            bitmapScaler.ScaledBitmap(bitmap = background, contentDescription = "Background")
+            bitmapScaler.FullScreenBackground(bitmap = background, contentDescription = "Background")
             when(trainingState) {
                 TrainingState.READY -> {
                     Ready(firmware = firmware) {

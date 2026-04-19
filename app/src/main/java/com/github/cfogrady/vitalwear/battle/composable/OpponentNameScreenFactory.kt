@@ -18,6 +18,7 @@ import com.github.cfogrady.vitalwear.composable.util.BitmapScaler
 import com.github.cfogrady.vitalwear.composable.util.PositionOffsetRatios
 import com.github.cfogrady.vitalwear.composable.util.ScrollingNameFactory
 import com.google.common.collect.Lists
+import kotlinx.coroutines.delay
 import timber.log.Timber
 
 class OpponentNameScreenFactory(private val bitmapScaler: BitmapScaler, private val backgroundHeight: Dp, private val scrollingNameFactory: ScrollingNameFactory) {
@@ -35,10 +36,9 @@ class OpponentNameScreenFactory(private val bitmapScaler: BitmapScaler, private 
             leftScreenEarly = true
             stateUpdater.invoke(FightTargetState.END_FIGHT)
         }
-        bitmapScaler.ScaledBitmap(
+        bitmapScaler.FullScreenBackground(
             bitmap = battleModel.background,
             contentDescription = "Background",
-            alignment = Alignment.BottomCenter,
             modifier = Modifier.clickable {
                 Timber.i("Continuing")
                 leftScreenEarly = true
@@ -58,11 +58,12 @@ class OpponentNameScreenFactory(private val bitmapScaler: BitmapScaler, private 
             )
         }
         NameBox(battleCharacter = battleCharacter)
-        Handler(Looper.getMainLooper()!!).postDelayed({
+        LaunchedEffect(nameAnimationTime) {
+            delay(nameAnimationTime * 2)
             if(!leftScreenEarly) {
                 stateUpdater.invoke(FightTargetState.READY)
             }
-        }, nameAnimationTime*2)
+        }
     }
     
     @Composable

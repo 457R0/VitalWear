@@ -55,7 +55,7 @@ class TrainingMenuActivity : ComponentActivity() {
                 }
             }.collectAsStateWithLifecycle()
             vitalBoxFactory.VitalBox {
-                bitmapScaler.ScaledBitmap(bitmap = background, contentDescription = "Background", alignment = Alignment.BottomCenter)
+                bitmapScaler.FullScreenBackground(bitmap = background, contentDescription = "Background")
                 val pagerState = rememberPagerState(pageCount = {4})
                 VerticalPager(state = pagerState) { page ->
                     when (page) {

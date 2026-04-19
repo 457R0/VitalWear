@@ -78,7 +78,7 @@ private fun PagedCharacterSelectionMenu(characters: List<CharacterPreview>, cont
     val options = characters.toMutableStateList()
     val background by controller.backgroundFlow.collectAsState()
     controller.vitalBoxFactory.VitalBox {
-        controller.bitmapScaler.ScaledBitmap(
+        controller.bitmapScaler.FullScreenBackground(
             bitmap = background,
             contentDescription = "background"
         )

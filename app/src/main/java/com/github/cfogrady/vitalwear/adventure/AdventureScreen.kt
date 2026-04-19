@@ -47,7 +47,7 @@ fun AdventureScreen(controller: AdventureScreenController) {
         }
     }
     vitalBoxFactory.VitalBox {
-        bitmapScaler.ScaledBitmap(bitmap = background, contentDescription = "background")
+        bitmapScaler.FullScreenBackground(bitmap = background, contentDescription = "background")
         val pagerState = rememberPagerState(pageCount = {2})
         VerticalPager(state = pagerState) {
             when(it) {

@@ -76,10 +76,9 @@ class StatsMenuActivity : ComponentActivity() {
         val initialStatsPage = remember { mutableStateOf(0) }
 
         vitalBoxFactory.VitalBox {
-            bitmapScaler.ScaledBitmap(
+            bitmapScaler.FullScreenBackground(
                 bitmap = background,
                 contentDescription = "Background",
-                alignment = Alignment.BottomCenter
             )
             val pagerState = rememberPagerState(pageCount = {1 + partner.transformationOptions.size})
             VerticalPager(state = pagerState) {rootPage ->

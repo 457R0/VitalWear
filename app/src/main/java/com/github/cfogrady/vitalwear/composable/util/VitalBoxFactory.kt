@@ -16,6 +16,7 @@ class VitalBoxFactory(
     private val imageScaler: ImageScaler,
     private val width: Int = ImageScaler.VB_WIDTH.toInt(),
     private val height: Int = ImageScaler.VB_HEIGHT.toInt(),
+    private val defaultFullScreen: Boolean = true,
 ) {
 
     companion object {
@@ -26,8 +27,8 @@ class VitalBoxFactory(
     }
 
     @Composable
-    fun VitalBox(content: @Composable BoxScope.() -> Unit) {
-        VitalBox(imageScaler, width, height, content)
+    fun VitalBox(fullScreen: Boolean = defaultFullScreen, content: @Composable BoxScope.() -> Unit) {
+        VitalBox(imageScaler, width, height, fullScreen, content)
     }
 }
 
@@ -36,15 +37,27 @@ fun VitalBox(
     imageScaler: ImageScaler,
     width: Int = ImageScaler.VB_WIDTH.toInt(),
     height: Int = ImageScaler.VB_HEIGHT.toInt(),
+    fullScreen: Boolean = true,
     content: @Composable BoxScope.()-> Unit
 ) {
     val scaledWidth = imageScaler.scaledDpValueFromPixels(width)
     val scaledHeight = imageScaler.scaledDpValueFromPixels(height)
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Box(modifier = Modifier
-            .clipToBounds()
-            .width(scaledWidth)
-            .height(scaledHeight), content=content)
+        val contentAlignment = if(fullScreen) Alignment.TopCenter else Alignment.TopStart
+        Box(
+            modifier = if(fullScreen) {
+                Modifier
+                    .fillMaxSize()
+                    .clipToBounds()
+            } else {
+                Modifier
+                    .clipToBounds()
+                    .width(scaledWidth)
+                    .height(scaledHeight)
+            },
+            contentAlignment = contentAlignment,
+            content = content
+        )
     }
 }
 

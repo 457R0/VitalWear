@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -72,6 +73,19 @@ class BitmapScaler(val imageScaler: ImageScaler) {
 
     fun scaledDimension(x: Int): Dp {
         return imageScaler.scaledDpValueFromPixels(x)
+    }
+
+    @Composable
+    fun FullScreenBackground(
+        bitmap: Bitmap,
+        contentDescription: String = "Background",
+        modifier: Modifier = Modifier,
+    ) {
+        com.github.cfogrady.vitalwear.composable.util.FullScreenBackground(
+            bitmap = bitmap,
+            contentDescription = contentDescription,
+            modifier = modifier,
+        )
     }
 }
 
@@ -169,4 +183,19 @@ fun PreviewAnimatedScaledBitmap() {
             )
         }
     }
+}
+
+@Composable
+fun FullScreenBackground(
+    bitmap: Bitmap,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+) {
+    Image(
+        bitmap = bitmap.asImageBitmap(),
+        contentDescription = contentDescription,
+        modifier = modifier.fillMaxSize(),
+        alignment = Alignment.Center,
+        contentScale = ContentScale.FillBounds,
+    )
 }

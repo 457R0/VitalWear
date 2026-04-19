@@ -18,6 +18,7 @@ import com.github.cfogrady.vitalwear.battle.data.PostBattleModel
 import com.github.cfogrady.vitalwear.composable.util.BitmapScaler
 import com.github.cfogrady.vitalwear.composable.util.PositionOffsetRatios
 import com.google.common.collect.Lists
+import kotlinx.coroutines.delay
 
 class AttackScreenFactory(val bitmapScaler: BitmapScaler, val backgroundHeight: Dp) {
 
@@ -46,7 +47,7 @@ class AttackScreenFactory(val bitmapScaler: BitmapScaler, val backgroundHeight: 
     fun AttackScreen(battleModel: PostBattleModel, finished: () -> Unit) {
         var attacker by remember { mutableStateOf(Attacker.PLAYER) }
         var round by remember { mutableStateOf(0) }
-        bitmapScaler.ScaledBitmap(bitmap = battleModel.background, contentDescription = "Background")
+        bitmapScaler.FullScreenBackground(bitmap = battleModel.background, contentDescription = "Background")
         if(attacker == Attacker.PLAYER) {
             Attack(battleModel, true, round) {
                 attacker = Attacker.OPPONENT
@@ -198,9 +199,10 @@ class AttackScreenFactory(val bitmapScaler: BitmapScaler, val backgroundHeight: 
                 alignment = Alignment.TopCenter,
                 modifier = Modifier.offset(y = backgroundHeight.times(PositionOffsetRatios.HEALTH_OFFSET_FROM_TOP)))
         }
-        Handler(Looper.getMainLooper()!!).postDelayed({
+        LaunchedEffect(Unit) {
+            delay(1000)
             onFinish.invoke()
-        }, 1000)
+        }
     }
 
     @Composable
@@ -253,9 +255,10 @@ class AttackScreenFactory(val bitmapScaler: BitmapScaler, val backgroundHeight: 
 
     @Composable
     fun CutIn(cutIn: Bitmap, onFinish: () -> Unit) {
-        Handler(Looper.getMainLooper()!!).postDelayed({
+        LaunchedEffect(Unit) {
+            delay(1000)
             onFinish.invoke()
-        }, 1000)
+        }
         bitmapScaler.ScaledBitmap(bitmap = cutIn, contentDescription = "Cut In")
     }
 
@@ -289,10 +292,11 @@ class AttackScreenFactory(val bitmapScaler: BitmapScaler, val backgroundHeight: 
                 onFinish.invoke()
             }, 0)
         }
-        Handler(Looper.getMainLooper()!!).postDelayed({
+        LaunchedEffect(Unit) {
+            delay(500)
             idle = false
             targetAttackOffset = 1f
-        }, 500)
+        }
 
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             if(supportIdleImg != null && supportAttackImg != null) {
@@ -524,9 +528,10 @@ class AttackScreenFactory(val bitmapScaler: BitmapScaler, val backgroundHeight: 
                 modifier = Modifier.offset(y = backgroundHeight.times(.1f)))
             }
         }
-        Handler(Looper.getMainLooper()!!).postDelayed({
+        LaunchedEffect(wasHit) {
+            delay(if(wasHit) 1500 else 500)
             roundEnd.invoke()
-        }, if(wasHit) 1500 else 500)
+        }
     }
 
 }

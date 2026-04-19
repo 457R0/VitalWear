@@ -5,9 +5,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,16 +51,22 @@ fun MainScreen(controller: MainScreenController) {
     val phase by remember(vbCharacter, readyToTransform) { mutableIntStateOf(vbCharacter?.speciesStats?.phase?: 0) }
     val hasActivePartner = vbCharacter != null
     val background by remember{controller.getBackgroundFlow()}.collectAsStateWithLifecycle()
+    var hasTriggeredTransformLaunch by remember { mutableStateOf(false) }
     val menuPages = remember(key1 = hasActivePartner, key2 = phase, key3 = sleeping) {
         buildMenuPages(hasActivePartner, phase, sleeping)
     }
-    if (readyToTransform && !sleeping) {
-        controller.launchTransformActivity()
+    LaunchedEffect(readyToTransform, sleeping) {
+        if (!readyToTransform || sleeping) {
+            hasTriggeredTransformLaunch = false
+        } else if (!hasTriggeredTransformLaunch) {
+            hasTriggeredTransformLaunch = true
+            controller.launchTransformActivity()
+        }
     }
 
 
     vitalBoxFactory.VitalBox {
-        bitmapScaler.ScaledBitmap(bitmap = background, contentDescription = "Background", alignment = Alignment.BottomCenter)
+        bitmapScaler.FullScreenBackground(bitmap = background, contentDescription = "Background")
         val pagerState = rememberPagerState(pageCount = {
             menuPages.size
         })
@@ -122,8 +130,13 @@ fun MainScreen(controller: MainScreenController) {
                             .clickable {
                                 controller.launchBattleActivity()
                             }, contentAlignment = Alignment.Center) {
+                            val menuIconSize = bitmapScaler.scaledDimension(controller.menuBitmaps.settingsIcon.width)
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Image(painter = painterResource(id = R.drawable.fight_icon), contentDescription = "Battle")
+                                Image(
+                                    painter = painterResource(id = R.drawable.fight_icon),
+                                    contentDescription = "Battle",
+                                    modifier = Modifier.size(menuIconSize)
+                                )
                                 Text(text = "BATTLE",  fontWeight = FontWeight.Bold, fontSize = 3.em)
                             }
                         }

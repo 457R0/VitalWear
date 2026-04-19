@@ -24,7 +24,7 @@ class EndFightReactionFactory(private val bitmapScaler: BitmapScaler, private va
         Handler(Looper.getMainLooper()!!).postDelayed({
             finished.invoke()
         }, 2000)
-        bitmapScaler.ScaledBitmap(bitmap = background, contentDescription = "Background")
+        bitmapScaler.FullScreenBackground(bitmap = background, contentDescription = "Background")
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().offset(y = backgroundHeight.times(PositionOffsetRatios.CHARACTER_OFFSET_FROM_BOTTOM))) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomEnd) {

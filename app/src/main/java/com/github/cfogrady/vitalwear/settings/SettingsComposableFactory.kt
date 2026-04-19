@@ -2,7 +2,9 @@ package com.github.cfogrady.vitalwear.settings
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,22 +45,24 @@ class SettingsComposableFactory(private val backgroundManager: BackgroundManager
         val background by backgroundManager.selectedBackground.collectAsState()
         val menuPages = remember { buildSettingMenuPages() }
         vitalBoxFactory.VitalBox {
-            bitmapScaler.ScaledBitmap(bitmap = background!!, contentDescription = "Background", alignment = Alignment.BottomCenter)
+            bitmapScaler.FullScreenBackground(bitmap = background!!, contentDescription = "Background")
             val pagerState = rememberPagerState(pageCount = {menuPages.size})
-            VerticalPager(state = pagerState) {
+            VerticalPager(modifier = Modifier.fillMaxSize(), state = pagerState) {
                 when(menuPages[it]) {
                     SettingsMenuOption.Background -> {
-                        Box(modifier = Modifier
-                            .fillMaxSize()
-                            .clickable {
-                                activityLauncher.backgroundSelection.invoke{}
-                            }, contentAlignment = Alignment.Center) {
+                        SettingsPageContainer(modifier = Modifier.clickable {
+                            activityLauncher.backgroundSelection.invoke{}
+                        }) {
                             Text(text = "BACKGROUND", fontWeight = FontWeight.Bold, fontSize = 2.1.em)
                         }
                     }
                     SettingsMenuOption.BattleBackground -> {
                         val battleBackgroundType by backgroundManager.battleBackgroundOption.collectAsState()
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
                             Text(text = "BATTLE", fontSize = 2.1.em, fontWeight = FontWeight.Bold)
                             Text(text = "BACKGROUND", fontSize = 2.1.em, fontWeight = FontWeight.Bold)
                             val radioScale = .5f
@@ -97,31 +101,36 @@ class SettingsComposableFactory(private val backgroundManager: BackgroundManager
                     SettingsMenuOption.ToggleLogging -> {
                         var loggingEnabled by remember { mutableStateOf(logSettings.loggingEnabled()) }
                         val text = if(loggingEnabled) "DISABLE\nLOGS" else "ENABLE\nLOGS"
-                        Box(modifier = Modifier
-                            .fillMaxSize()
-                            .clickable {
-                                loggingEnabled = logSettings.toggleLogging()
-                            }, contentAlignment = Alignment.Center) {
+                        SettingsPageContainer(modifier = Modifier.clickable {
+                            loggingEnabled = logSettings.toggleLogging()
+                        }) {
                             Text(text = text, fontWeight = FontWeight.Bold, fontSize = 3.em, textAlign = TextAlign.Center)
                         }
                     }
                     SettingsMenuOption.Save -> {
-                        Box(modifier = Modifier
-                            .fillMaxSize()
-                            .clickable {
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    saveService.save()
-                                    withContext(Dispatchers.Main) {
-                                        activityLauncher.toast.invoke("Save Completed")
-                                    }
+                        SettingsPageContainer(modifier = Modifier.clickable {
+                            CoroutineScope(Dispatchers.IO).launch {
+                                saveService.save()
+                                withContext(Dispatchers.Main) {
+                                    activityLauncher.toast.invoke("Save Completed")
                                 }
-                            }, contentAlignment = Alignment.Center) {
+                            }
+                        }) {
                             Text(text = "SAVE", fontWeight = FontWeight.Bold, fontSize = 3.em)
                         }
                     }
                 }
             }
         }
+    }
+
+    @Composable
+    private fun SettingsPageContainer(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+            content = content,
+        )
     }
 
     enum class SettingsMenuOption {

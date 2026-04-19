@@ -121,6 +121,7 @@ class VitalWearApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
 
+
         //TODO: Migrate sharedPreferences over to saveDataRepository
         saveDataRepository = SaveDataRepository(this.saveDataStore)
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
@@ -182,7 +183,11 @@ class VitalWearApp : Application(), Configuration.Provider {
         backgroundHeight = imageScaler.calculateBackgroundHeight()
         bitmapScaler = BitmapScaler(imageScaler)
         scrollingNameFactory = ScrollingNameFactory(backgroundHeight, bitmapScaler)
-        vitalBoxFactory = VitalBoxFactory(imageScaler, ImageScaler.VB_WIDTH.toInt(), ImageScaler.VB_HEIGHT.toInt())
+        vitalBoxFactory = VitalBoxFactory(
+            imageScaler = imageScaler,
+            width = ImageScaler.VB_WIDTH.toInt(),
+            height = ImageScaler.VB_HEIGHT.toInt(),
+        )
         val opponentSplashFactory = OpponentSplashFactory(bitmapScaler)
         val opponentNameScreenFactory = OpponentNameScreenFactory(bitmapScaler, backgroundHeight, scrollingNameFactory)
         val readyScreenFactory = ReadyScreenFactory(bitmapScaler, backgroundHeight)
@@ -202,7 +207,7 @@ class VitalWearApp : Application(), Configuration.Provider {
         previewCharacterManager = PreviewCharacterManager(database.characterDao(), cardCharacterImageService)
         shutdownReceiver = ShutdownReceiver(shutdownManager)
         applicationBootManager = ApplicationBootManager(characterManager as CharacterManagerImpl, firmwareManager, stepService, vbUpdater, moodService, notificationChannelManager, complicationRefreshService)
-        cardReceiver = CardReceiver(cardLoader)
+        cardReceiver = CardReceiver(cardLoader, notificationChannelManager)
         firmwareReceiver = FirmwareReceiver(firmwareManager, notificationChannelManager)
         settingsComposableFactory = SettingsComposableFactory(backgroundManager, vitalBoxFactory, bitmapScaler, logSettings, saveService)
     }

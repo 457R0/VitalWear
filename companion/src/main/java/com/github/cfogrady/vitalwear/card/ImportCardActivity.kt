@@ -60,6 +60,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.nio.charset.Charset
 
 /**
@@ -88,6 +90,8 @@ class ImportCardActivity() : ComponentActivity() {
     private lateinit var uri: Uri
     private var cardName = MutableStateFlow("")
     private var uniqueSprites = MutableStateFlow(false)
+    private val importPercent = MutableStateFlow(0)
+    private val importStatus = MutableStateFlow("Preparing transfer")
     private lateinit var card: Card<out DimHeader, out CharacterStats<out CharacterStatsEntry>, out TransformationRequirements<out TransformationRequirementsEntry>, out AdventureLevels<out AdventureLevel>, out AttributeFusions, out SpecificFusions<out SpecificFusionEntry>>
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -129,7 +133,9 @@ class ImportCardActivity() : ComponentActivity() {
                         }
 
                     }
-                    Loading(loadingText = "Importing Card Image") {
+                    val percent by importPercent.collectAsState()
+                    val status by importStatus.collectAsState()
+                    Loading(loadingText = "$status ($percent%)") {
                     }
                 }
                 ImportState.Success -> {
@@ -230,21 +236,49 @@ class ImportCardActivity() : ComponentActivity() {
     }
 
     private suspend fun importCard() {
-        // cardLoader.importCardImage(applicationContext, "", card, false)
+        importPercent.value = 0
+        importStatus.value = "Preparing card"
         val channelClient = Wearable.getChannelClient(this)
         val nodes = Wearable.getNodeClient(this).connectedNodes.await()
+        val cardWriter = DimWriter()
+        val cardPayload = ByteArrayOutputStream().use { outputStream ->
+            cardWriter.writeCard(card, outputStream)
+            outputStream.toByteArray()
+        }
+        val cardNameBytes = cardName.value.toByteArray(Charset.defaultCharset())
+        val metadataLength = cardNameBytes.size + 1 + 1 + 4
+        val totalBytes = (metadataLength + cardPayload.size).toLong() * nodes.size
+        var transferredBytes = 0L
         for (node in nodes) {
             val channel = channelClient.openChannel(node.id, ChannelTypes.CARD_DATA).await()
             Timber.i("Digiport open!")
             channelClient.getOutputStream(channel).await().use {os ->
                 Timber.i("Writing the card data!")
-                val cardWriter = DimWriter()
-                os.write(cardName.value.toByteArray(Charset.defaultCharset()))
-                os.write(0)
-                os.write(if(uniqueSprites.value) 1 else 0)
-                cardWriter.writeCard(card, os)
+                val output = DataOutputStream(os)
+                output.write(cardNameBytes)
+                output.writeByte(0)
+                output.writeByte(if(uniqueSprites.value) 1 else 0)
+                output.writeInt(cardPayload.size)
+                transferredBytes += metadataLength
+                val metadataPercent = if (totalBytes == 0L) 0 else ((transferredBytes * 100) / totalBytes).toInt().coerceIn(0, 100)
+                importStatus.value = "Sending card to watch"
+                importPercent.value = metadataPercent
+
+                val buffer = ByteArray(4096)
+                var bytesRead: Int
+                cardPayload.inputStream().use { payloadInput ->
+                    while (payloadInput.read(buffer).also { bytesRead = it } >= 0) {
+                        output.write(buffer, 0, bytesRead)
+                        transferredBytes += bytesRead
+                        val transferPercent = if (totalBytes == 0L) 0 else ((transferredBytes * 100) / totalBytes).toInt().coerceIn(0, 100)
+                        importPercent.value = transferPercent
+                    }
+                }
+                output.flush()
             }
             channelClient.close(channel).await()
         }
+        importStatus.value = "Transfer complete"
+        importPercent.value = 100
     }
 }

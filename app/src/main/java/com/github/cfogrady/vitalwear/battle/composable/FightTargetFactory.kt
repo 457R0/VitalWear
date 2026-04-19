@@ -2,7 +2,6 @@ package com.github.cfogrady.vitalwear.battle.composable
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalContext
 import com.github.cfogrady.vitalwear.battle.data.PostBattleModel
 import com.github.cfogrady.vitalwear.battle.data.BattleResult
 import com.github.cfogrady.vitalwear.battle.BattleService
@@ -70,14 +69,21 @@ class FightTargetFactory(
                 FightTargetState.END_FIGHT -> {
                     //back to normal background
                     endFightReactionFactory.EndFightReaction(battleResult = battleConclusion, battleModel.background) {
-                        state = FightTargetState.VITALS
+                        // Retreating before battle execution has no post-battle vitals to show.
+                        if (postBattle == null) {
+                            activityFinished.invoke(battleConclusion)
+                        } else {
+                            state = FightTargetState.VITALS
+                        }
                     }
                 }
                 FightTargetState.VITALS -> {
                     //back to normal background
-                    endFightVitalsFactory.EndFightVitals(postBattleModel = postBattle!!) {
-                        activityFinished.invoke(battleConclusion)
-                    }
+                    postBattle?.let { postBattleModel ->
+                        endFightVitalsFactory.EndFightVitals(postBattleModel = postBattleModel) {
+                            activityFinished.invoke(battleConclusion)
+                        }
+                    } ?: activityFinished.invoke(battleConclusion)
                 }
             }
         }

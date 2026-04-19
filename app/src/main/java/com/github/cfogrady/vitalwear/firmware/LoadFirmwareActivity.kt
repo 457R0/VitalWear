@@ -25,13 +25,19 @@ class LoadFirmwareActivity  : ComponentActivity() {
         val firmwareReceiver = (application as VitalWearApp).firmwareReceiver
         setContent {
             val firmwareUploads by firmwareReceiver.firmwareUpdates.collectAsState()
+            val firmwareProgress by firmwareReceiver.firmwareImportProgress.collectAsState()
             LaunchedEffect(firmwareUploads) {
                 if(firmwareUploads > 0) {
                     finish()
                 }
             }
             Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "Import Firmware From Phone To Continue", textAlign = TextAlign.Center)
+                val loadingText = if (firmwareProgress > 0) {
+                    "Importing Firmware $firmwareProgress%"
+                } else {
+                    "Import Firmware From Phone To Continue"
+                }
+                Text(text = loadingText, textAlign = TextAlign.Center)
             }
         }
     }

@@ -81,6 +81,8 @@
             android:taskAffinity="" />
         <activity android:name=".character.transformation.TransformationActivity"
             android:taskAffinity="" />
+        <activity android:name=".card.LoadCardActivity"
+            android:taskAffinity="" />
         <activity android:name=".firmware.LoadFirmwareActivity"
             android:taskAffinity="" />
         <activity android:name=".training.TrainingMenuActivity"

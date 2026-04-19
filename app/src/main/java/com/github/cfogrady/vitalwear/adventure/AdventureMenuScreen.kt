@@ -201,11 +201,12 @@ fun ZoneSelection(
     } else {
         val pagerState = rememberPagerState(pageCount = {adventures.size}, initialPage = adventures.size-1)
         val bitmapScaler = controller.bitmapScaler
+        val centeredCardIcon = remember(cardIcon) { trimTransparentHorizontalPadding(cardIcon) }
         controller.vitalBoxFactory.VitalBox {
             VerticalPager(state = pagerState) {
                 val adventure = adventures[it]
                 Box {
-                    bitmapScaler.ScaledBitmap(
+                    bitmapScaler.FullScreenBackground(
                         bitmap = backgrounds[adventure.walkingBackgroundId],
                         contentDescription = "background"
                     )
@@ -224,7 +225,9 @@ fun ZoneSelection(
                                 contentDescription = "mission text"
                             )
                         }
-                        bitmapScaler.ScaledBitmap(bitmap = cardIcon, contentDescription = "card icon")
+                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            bitmapScaler.ScaledBitmap(bitmap = centeredCardIcon, contentDescription = "card icon")
+                        }
                         bitmapScaler.ScaledBitmap(bitmap = controller.adventureBitmaps.stageImage, contentDescription = "stage text")
                         Text(text = formatNumber(it+1, 2), fontWeight = FontWeight.Bold, fontSize = 3.em)
                     }
@@ -232,6 +235,31 @@ fun ZoneSelection(
             }
         }
     }
+}
+
+private fun trimTransparentHorizontalPadding(bitmap: Bitmap): Bitmap {
+    var left = bitmap.width
+    var right = -1
+    for (x in 0 until bitmap.width) {
+        for (y in 0 until bitmap.height) {
+            if ((bitmap.getPixel(x, y) ushr 24) != 0) {
+                if (x < left) {
+                    left = x
+                }
+                if (x > right) {
+                    right = x
+                }
+            }
+        }
+    }
+    if (right < left) {
+        return bitmap
+    }
+    val croppedWidth = right - left + 1
+    if (croppedWidth <= 0 || croppedWidth == bitmap.width) {
+        return bitmap
+    }
+    return Bitmap.createBitmap(bitmap, left, 0, croppedWidth, bitmap.height)
 }
 
 private fun createAdventureEntity(adventureId: Int, steps: Int, characterId: Int): AdventureEntity {
@@ -321,7 +349,7 @@ fun ZoneConfirm(controller: ZoneConfirmController, cardMetaEntity: CardMetaEntit
         }
     } else {
         controller.vitalBoxFactory.VitalBox {
-            bitmapScaler.ScaledBitmap(bitmap = backgrounds[adventureEntity.bossBackgroundId], contentDescription = "background")
+            bitmapScaler.FullScreenBackground(bitmap = backgrounds[adventureEntity.bossBackgroundId], contentDescription = "background")
             Column(modifier = Modifier
                 .fillMaxSize()
                 .clickable {
@@ -403,7 +431,7 @@ fun Ready(controller: ReadyController, background: Bitmap, onFinish: () -> Unit)
         }, 1000)
     }
     controller.vitalBoxFactory.VitalBox {
-        controller.bitmapScaler.ScaledBitmap(
+        controller.bitmapScaler.FullScreenBackground(
             bitmap = background,
             contentDescription = "background"
         )
@@ -455,7 +483,7 @@ fun Go(controller: GoController, background: Bitmap, onFinish: () -> Unit) {
         }, 500)
     }
     controller.vitalBoxFactory.VitalBox {
-        controller.bitmapScaler.ScaledBitmap(
+        controller.bitmapScaler.FullScreenBackground(
             bitmap = background,
             contentDescription = "background"
         )

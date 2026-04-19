@@ -10,6 +10,7 @@ import com.github.cfogrady.vitalwear.VitalWearApp
 import com.github.cfogrady.vitalwear.firmware.components.AdventureBitmaps
 import com.github.cfogrady.vitalwear.card.CardMeta
 import com.github.cfogrady.vitalwear.common.card.CardSpritesIO
+import com.github.cfogrady.vitalwear.common.card.CardType
 import com.github.cfogrady.vitalwear.common.card.CharacterSpritesIO
 import com.github.cfogrady.vitalwear.common.card.db.AdventureEntity
 import com.github.cfogrady.vitalwear.common.card.db.CardMetaEntity
@@ -53,7 +54,12 @@ class AdventureMenuActivity : ComponentActivity(), AdventureMenuScreenController
     }
 
     override fun loadCardIcon(cardName: String): Bitmap {
-        return vitalWearApp.cardSpriteIO.loadCardSprite(this, cardName, CardSpritesIO.ICON)
+        val cardMeta = vitalWearApp.cardMetaEntityDao.getByName(cardName)
+        return if (cardMeta?.cardType == CardType.DIM) {
+            vitalWearApp.cardSpriteIO.loadIndexedSprite(this, cardName, CardSpritesIO.START_ICONS, 0)
+        } else {
+            vitalWearApp.cardSpriteIO.loadCardSprite(this, cardName, CardSpritesIO.ICON)
+        }
     }
 
     override fun startAdventure(cardName: String, selectedAdventureId: Int) {
