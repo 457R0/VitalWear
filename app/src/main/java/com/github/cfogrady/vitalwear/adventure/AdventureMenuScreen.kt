@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.em
 import androidx.wear.compose.material3.Text
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.github.cfogrady.vitalwear.Loading
+import com.github.cfogrady.vitalwear.card.CardReceiver
 import com.github.cfogrady.vitalwear.character.activity.CardSelectController
 import com.github.cfogrady.vitalwear.character.activity.CardSelection
 import com.github.cfogrady.vitalwear.firmware.components.AdventureBitmaps
@@ -136,6 +137,8 @@ private fun AdventureMenuScreenPreview() {
         }
         override fun startAdventure(cardName: String, selectedAdventureId: Int) {}
         override val cardsImported: StateFlow<Int> = MutableStateFlow(0)
+        override val cardImportProgress: StateFlow<CardReceiver.CardImportProgress> =
+            MutableStateFlow(CardReceiver.CardImportProgress.idle())
 
         override fun loadCards(): List<CardMetaEntity> {
             return listOf(

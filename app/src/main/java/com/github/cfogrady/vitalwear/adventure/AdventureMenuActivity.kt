@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.ui.unit.Dp
 import com.github.cfogrady.vitalwear.VitalWearApp
 import com.github.cfogrady.vitalwear.firmware.components.AdventureBitmaps
+import com.github.cfogrady.vitalwear.card.CardReceiver
 import com.github.cfogrady.vitalwear.card.CardMeta
 import com.github.cfogrady.vitalwear.common.card.CardSpritesIO
 import com.github.cfogrady.vitalwear.common.card.CardType
@@ -71,6 +72,9 @@ class AdventureMenuActivity : ComponentActivity(), AdventureMenuScreenController
 
     override val cardsImported: StateFlow<Int>
         get() = vitalWearApp.cardReceiver.cardsImported
+
+    override val cardImportProgress: StateFlow<CardReceiver.CardImportProgress>
+        get() = vitalWearApp.cardReceiver.cardImportProgress
 
     override fun loadCards(): List<CardMetaEntity> {
         val activeCharacter = vitalWearApp.characterManager.getCurrentCharacter()!!

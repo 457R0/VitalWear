@@ -54,7 +54,7 @@ interface MainScreenController {
         context: Context,
         imageScaler: ImageScaler = ImageScaler.getContextImageScaler(context),
         override val bitmapScaler: BitmapScaler = BitmapScaler(imageScaler),
-        override val vitalBoxFactory: VitalBoxFactory = VitalBoxFactory(imageScaler, ImageScaler.VB_WIDTH.toInt(), ImageScaler.VB_HEIGHT.toInt()),
+        override val vitalBoxFactory: VitalBoxFactory = VitalBoxFactory(imageScaler),
         firmware: Firmware = Firmware.loadPreviewFirmwareFromDisk(context),
         override val menuBitmaps: MenuBitmaps = firmware.menuBitmaps,
         private val background: StateFlow<Bitmap> = MutableStateFlow(BitmapFactory.decodeStream(context.assets.open("test_background.png"))),

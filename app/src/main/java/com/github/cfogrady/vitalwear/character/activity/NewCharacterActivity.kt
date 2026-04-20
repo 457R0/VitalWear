@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.github.cfogrady.vitalwear.VitalWearApp
+import com.github.cfogrady.vitalwear.card.CardReceiver
 import com.github.cfogrady.vitalwear.card.CardMeta
 import com.github.cfogrady.vitalwear.character.CharacterManager
 import com.github.cfogrady.vitalwear.common.card.CardSpritesIO
@@ -53,4 +54,7 @@ class NewCharacterActivity : ComponentActivity(), CardSelectController {
 
     override val cardsImported: StateFlow<Int>
         get() = (application as VitalWearApp).cardReceiver.cardsImported
+
+    override val cardImportProgress: StateFlow<CardReceiver.CardImportProgress>
+        get() = (application as VitalWearApp).cardReceiver.cardImportProgress
 }

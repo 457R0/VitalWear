@@ -2,6 +2,7 @@ package com.github.cfogrady.vitalwear.firmware
 
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
@@ -26,14 +27,21 @@ import java.io.DataOutputStream
 
 class FirmwareImportActivity : ComponentActivity() {
 
+    data class TransferProgress(val bytesSent: Long, val totalBytes: Long) {
+        fun percent(): Int {
+            if (totalBytes <= 0) return 0
+            return ((bytesSent * 100) / totalBytes).toInt().coerceIn(0, 100)
+        }
+    }
+
     enum class FirmwareImportState {
         PickFirmware,
         LoadFirmware,
     }
 
     var importState = MutableStateFlow(FirmwareImportState.PickFirmware)
-    private val transferPercent = MutableStateFlow(0)
-    private val transferStatus = MutableStateFlow("Preparing transfer")
+    private val transferProgress = MutableStateFlow(TransferProgress(0, 0))
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val firmwareImportActivity = buildFirmwareFilePickLauncher()
@@ -46,19 +54,22 @@ class FirmwareImportActivity : ComponentActivity() {
     fun BuildScreen(firmwareImportActivity: ActivityResultLauncher<Array<String>>) {
         KeepScreenOn()
         val state by importState.collectAsState()
-        val percent by transferPercent.collectAsState()
-        val status by transferStatus.collectAsState()
+        val progress by transferProgress.collectAsState()
         if(state == FirmwareImportState.PickFirmware) {
-            LaunchedEffect(true ) {
+            LaunchedEffect(true) {
                 firmwareImportActivity.launch(arrayOf("*/*"))
             }
         }
-        val loadingText = if (state == FirmwareImportState.PickFirmware) {
-            "Select firmware file"
-        } else {
-            "$status ($percent%)"
+        Loading(loadingText = buildProgressText(progress)) {}
+    }
+
+    private fun buildProgressText(progress: TransferProgress): String {
+        if (progress.totalBytes <= 0) {
+            return "Importing Firmware... May take up to 30 seconds"
         }
-        Loading(loadingText = loadingText) {}
+        val sentKb = progress.bytesSent / 1024
+        val totalKb = progress.totalBytes / 1024
+        return "Importing Firmware... ${progress.percent()}% (${sentKb}KB/${totalKb}KB)"
     }
 
     private fun buildFirmwareFilePickLauncher(): ActivityResultLauncher<Array<String>> {
@@ -74,48 +85,60 @@ class FirmwareImportActivity : ComponentActivity() {
     }
 
     private fun importFirmware(uri: Uri) {
-        transferPercent.value = 0
-        transferStatus.value = "Reading firmware file"
         val channelClient = Wearable.getChannelClient(this)
         val nodeListTask = Wearable.getNodeClient(this).connectedNodes
         lifecycleScope.launch(Dispatchers.IO) {
-            val nodes = nodeListTask.await()
-            lateinit var firmware: ByteArray
-            contentResolver.openInputStream(uri).use {
-                firmware = it!!.readBytes()
-            }
-            transferPercent.value = 5
-            transferStatus.value = "Sending firmware"
-            val totalBytes = (firmware.size + 4).toLong() * nodes.size
-            var transferredBytes = 0L
-            for (node in nodes) {
-                val channel = channelClient.openChannel(node.id, ChannelTypes.FIRMWARE_DATA).await()
-                // We don't use send file because we can't make use of the uri received from the file picker with sendFile. We need a full file path, to which we don't have access.
-                channelClient.getOutputStream(channel).await().use {
-                    val output = DataOutputStream(it)
-                    Timber.i("Writing to firmware to watch")
-                    output.writeInt(firmware.size)
-                    transferredBytes += 4
-                    transferPercent.value = if (totalBytes == 0L) 0 else ((transferredBytes * 100) / totalBytes).toInt().coerceIn(0, 100)
-                    val buffer = ByteArray(4096)
-                    var bytesRead: Int
-                    firmware.inputStream().use { firmwareInput ->
-                        while (firmwareInput.read(buffer).also { bytesRead = it } >= 0) {
-                            output.write(buffer, 0, bytesRead)
-                            transferredBytes += bytesRead
-                            transferPercent.value = if (totalBytes == 0L) 0 else ((transferredBytes * 100) / totalBytes).toInt().coerceIn(0, 100)
-                        }
+            try {
+                val nodes = nodeListTask.await()
+                if (nodes.isEmpty()) {
+                    Timber.w("No connected watch nodes found for firmware import")
+                    runOnUiThread {
+                        Toast.makeText(this@FirmwareImportActivity, "No connected watch found", Toast.LENGTH_SHORT).show()
+                        finish()
                     }
-                    output.flush()
-                    Timber.i("Done writing to firmware to watch")
+                    return@launch
                 }
-                Timber.i("Closing channel to watch")
-                channelClient.close(channel).await()
-            }
-            transferStatus.value = "Transfer complete"
-            transferPercent.value = 100
-            withContext(Dispatchers.Main) {
-                finish()
+
+                lateinit var firmware: ByteArray
+                contentResolver.openInputStream(uri).use {
+                    firmware = it!!.readBytes()
+                }
+                // total = 4-byte int size header + firmware payload
+                val totalBytes = (4 + firmware.size).toLong()
+                transferProgress.value = TransferProgress(0, totalBytes)
+
+                for (node in nodes) {
+                    val channel = channelClient.openChannel(node.id, ChannelTypes.FIRMWARE_DATA).await()
+                    channelClient.getOutputStream(channel).await().use {
+                        val output = DataOutputStream(it)
+                        Timber.i("Writing firmware to watch")
+                        output.writeInt(firmware.size)
+                        transferProgress.value = TransferProgress(4L, totalBytes)
+
+                        val buffer = ByteArray(4096)
+                        var bytesRead: Int
+                        var transferredBytes = 4L
+                        firmware.inputStream().use { firmwareInput ->
+                            while (firmwareInput.read(buffer).also { bytesRead = it } >= 0) {
+                                output.write(buffer, 0, bytesRead)
+                                transferredBytes += bytesRead
+                                transferProgress.value = TransferProgress(transferredBytes, totalBytes)
+                            }
+                        }
+                        output.flush()
+                        Timber.i("Done writing firmware to watch")
+                    }
+                    Timber.i("Closing channel to watch")
+                    channelClient.close(channel).await()
+                    withContext(Dispatchers.Main) { finish() }
+                    return@launch
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to import firmware")
+                runOnUiThread {
+                    Toast.makeText(this@FirmwareImportActivity, "Firmware import failed", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
             }
         }
     }

@@ -21,6 +21,7 @@ import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.Text
 import androidx.wear.tooling.preview.devices.WearDevices
+import com.github.cfogrady.vitalwear.card.CardReceiver
 import com.github.cfogrady.vitalwear.common.card.CardType
 import com.github.cfogrady.vitalwear.common.card.db.CardMetaEntity
 import kotlinx.coroutines.Dispatchers
@@ -30,12 +31,14 @@ import kotlinx.coroutines.withContext
 
 interface CardSelectController {
     val cardsImported: StateFlow<Int>
+    val cardImportProgress: StateFlow<CardReceiver.CardImportProgress>
     fun loadCards(): List<CardMetaEntity>
 }
 
 @Composable
 fun CardSelection(controller: CardSelectController, onSelect: (CardMetaEntity) -> Unit) {
     val cardsImported by controller.cardsImported.collectAsState()
+    val cardImportProgress by controller.cardImportProgress.collectAsState()
     var loaded by remember { mutableStateOf(false) }
     var cards by remember { mutableStateOf(ArrayList<CardMetaEntity>() as List<CardMetaEntity>) }
     LaunchedEffect(cardsImported) {
@@ -51,12 +54,28 @@ fun CardSelection(controller: CardSelectController, onSelect: (CardMetaEntity) -
         }
     } else if(cards.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(text = "Import Card From Phone")
+            Text(text = getEmptyCardMessage(cardImportProgress))
         }
     } else {
         LoadedCardSelection(cards, onSelect = {
             onSelect(it)
         })
+    }
+}
+
+private fun getEmptyCardMessage(progress: CardReceiver.CardImportProgress): String {
+    return when (progress.stage) {
+        CardReceiver.CardImportStage.Receiving -> {
+            val kb = progress.bytesReceived / 1024
+            if (progress.cardName == null) {
+                "Importing Card From Phone... ${kb}KB"
+            } else {
+                "Importing ${progress.cardName}... ${kb}KB"
+            }
+        }
+        CardReceiver.CardImportStage.Complete -> "Card imported. Refreshing list..."
+        CardReceiver.CardImportStage.Failed -> "Card import failed. Try again from phone."
+        else -> "Import Card From Phone"
     }
 }
 
@@ -124,6 +143,8 @@ private fun PreviewCardSelection() {
     CardSelection(object: CardSelectController{
         override val cardsImported: StateFlow<Int>
             get() = MutableStateFlow(0)
+        override val cardImportProgress: StateFlow<CardReceiver.CardImportProgress>
+            get() = MutableStateFlow(CardReceiver.CardImportProgress.idle())
 
         override fun loadCards(): List<CardMetaEntity> {
             return listOf(

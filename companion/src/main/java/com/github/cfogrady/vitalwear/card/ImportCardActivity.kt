@@ -62,12 +62,23 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
+<<<<<<< HEAD
+import java.io.DataOutputStream
+=======
+>>>>>>> b88a756 (VBHelper transfer interop, fix VitalBox centering, fix AdventureMenuScreen preview)
 import java.nio.charset.Charset
 
 /**
  * Activity to import card images
  */
 class ImportCardActivity() : ComponentActivity() {
+
+    data class TransferProgress(val bytesSent: Long, val totalBytes: Long) {
+        fun percent(): Int {
+            if (totalBytes <= 0) return 0
+            return ((bytesSent * 100) / totalBytes).toInt().coerceIn(0, 100)
+        }
+    }
 
     private val activityHelper: ActivityHelper = ActivityHelper(this)
 
@@ -86,6 +97,7 @@ class ImportCardActivity() : ComponentActivity() {
     private lateinit var cardLoader: CardLoader
 
     private val importState = MutableStateFlow(ImportState.PickFile)
+    private val transferProgress = MutableStateFlow(TransferProgress(0, 0))
     private var cardsLoaded = setOf<String>()
     private lateinit var uri: Uri
     private var cardName = MutableStateFlow("")
@@ -126,16 +138,20 @@ class ImportCardActivity() : ComponentActivity() {
                     }
                 }
                 ImportState.ImportCard -> {
+                    val progress by transferProgress.collectAsState()
                     LaunchedEffect(true) {
                         withContext(Dispatchers.IO) {
                             importCard()
                             importState.value = ImportState.Success
                         }
-
                     }
+<<<<<<< HEAD
                     val percent by importPercent.collectAsState()
                     val status by importStatus.collectAsState()
                     Loading(loadingText = "$status ($percent%)") {
+=======
+                    Loading(loadingText = buildCardProgressText(progress)) {
+>>>>>>> b88a756 (VBHelper transfer interop, fix VitalBox centering, fix AdventureMenuScreen preview)
                     }
                 }
                 ImportState.Success -> {
@@ -233,11 +249,43 @@ class ImportCardActivity() : ComponentActivity() {
                 importState.value = ImportState.UnlockCard
             }
         }
+        val cardWriter = DimWriter()
+        val cardPayload = ByteArrayOutputStream().use { outputStream ->
+            cardWriter.writeCard(card, outputStream)
+            outputStream.toByteArray()
+        }
+        val cardNameBytes = cardName.value.toByteArray(Charset.defaultCharset())
+        // metadataLength = name bytes + null terminator + uniqueSprites byte + 4-byte int size
+        val metadataLength = cardNameBytes.size + 1 + 1 + 4
+        val totalBytes = (metadataLength + cardPayload.size).toLong()
+        transferProgress.value = TransferProgress(0, totalBytes)
     }
 
     private suspend fun importCard() {
+<<<<<<< HEAD
         importPercent.value = 0
         importStatus.value = "Preparing card"
+=======
+        // Pre-serialize the full payload so we know total bytes upfront
+                val output = DataOutputStream(os)
+                output.write(cardNameBytes)
+                output.writeByte(0)
+                output.writeByte(if (uniqueSprites.value) 1 else 0)
+                output.writeInt(cardPayload.size)
+                var transferredBytes = metadataLength.toLong()
+                transferProgress.value = TransferProgress(transferredBytes, totalBytes)
+
+                val buffer = ByteArray(4096)
+                var bytesRead: Int
+                cardPayload.inputStream().use { payloadInput ->
+                    while (payloadInput.read(buffer).also { bytesRead = it } >= 0) {
+                        output.write(buffer, 0, bytesRead)
+                        transferredBytes += bytesRead
+                        transferProgress.value = TransferProgress(transferredBytes, totalBytes)
+                    }
+
+                output.flush()
+>>>>>>> b88a756 (VBHelper transfer interop, fix VitalBox centering, fix AdventureMenuScreen preview)
         val channelClient = Wearable.getChannelClient(this)
         val nodes = Wearable.getNodeClient(this).connectedNodes.await()
         val cardWriter = DimWriter()
@@ -252,8 +300,9 @@ class ImportCardActivity() : ComponentActivity() {
         for (node in nodes) {
             val channel = channelClient.openChannel(node.id, ChannelTypes.CARD_DATA).await()
             Timber.i("Digiport open!")
-            channelClient.getOutputStream(channel).await().use {os ->
+            channelClient.getOutputStream(channel).await().use { os ->
                 Timber.i("Writing the card data!")
+<<<<<<< HEAD
                 val output = DataOutputStream(os)
                 output.write(cardNameBytes)
                 output.writeByte(0)
@@ -275,6 +324,17 @@ class ImportCardActivity() : ComponentActivity() {
                     }
                 }
                 output.flush()
+=======
+                var offset = 0
+                var bytesSent = 0L
+                while (offset < payload.size) {
+                    val chunkSize = minOf(16 * 1024, payload.size - offset)
+                    os.write(payload, offset, chunkSize)
+                    offset += chunkSize
+                    bytesSent += chunkSize
+                    transferProgress.value = TransferProgress(bytesSent, payload.size.toLong())
+                }
+>>>>>>> b88a756 (VBHelper transfer interop, fix VitalBox centering, fix AdventureMenuScreen preview)
             }
             channelClient.close(channel).await()
         }

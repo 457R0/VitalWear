@@ -50,6 +50,7 @@ import com.github.cfogrady.vitalwear.log.LogSettings
 import com.github.cfogrady.vitalwear.common.log.TinyLogTree
 import com.github.cfogrady.vitalwear.firmware.FirmwareManager
 import com.github.cfogrady.vitalwear.firmware.FirmwareReceiver
+import com.github.cfogrady.vitalwear.transfer.CharacterReceiver
 import com.github.cfogrady.vitalwear.firmware.PostFirmwareLoader
 import com.github.cfogrady.vitalwear.heartrate.HeartRateService
 import com.github.cfogrady.vitalwear.notification.NotificationChannelManager
@@ -111,6 +112,7 @@ class VitalWearApp : Application(), Configuration.Provider {
     lateinit var adventureService: AdventureService
     lateinit var cardReceiver: CardReceiver
     lateinit var firmwareReceiver: FirmwareReceiver
+    lateinit var characterReceiver: CharacterReceiver
     lateinit var moodService: MoodService
     lateinit var settingsComposableFactory: SettingsComposableFactory
     private lateinit var applicationBootManager: ApplicationBootManager
@@ -120,6 +122,7 @@ class VitalWearApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+
 
 
         //TODO: Migrate sharedPreferences over to saveDataRepository
@@ -183,11 +186,15 @@ class VitalWearApp : Application(), Configuration.Provider {
         backgroundHeight = imageScaler.calculateBackgroundHeight()
         bitmapScaler = BitmapScaler(imageScaler)
         scrollingNameFactory = ScrollingNameFactory(backgroundHeight, bitmapScaler)
+<<<<<<< HEAD
         vitalBoxFactory = VitalBoxFactory(
             imageScaler = imageScaler,
             width = ImageScaler.VB_WIDTH.toInt(),
             height = ImageScaler.VB_HEIGHT.toInt(),
         )
+=======
+        vitalBoxFactory = VitalBoxFactory(imageScaler)
+>>>>>>> b88a756 (VBHelper transfer interop, fix VitalBox centering, fix AdventureMenuScreen preview)
         val opponentSplashFactory = OpponentSplashFactory(bitmapScaler)
         val opponentNameScreenFactory = OpponentNameScreenFactory(bitmapScaler, backgroundHeight, scrollingNameFactory)
         val readyScreenFactory = ReadyScreenFactory(bitmapScaler, backgroundHeight)
@@ -198,7 +205,7 @@ class VitalWearApp : Application(), Configuration.Provider {
         val endFightVitalsFactory = EndFightVitalsFactory(bitmapScaler, firmwareManager, backgroundManager, backgroundHeight)
         fightTargetFactory = FightTargetFactory(battleService, vitalBoxFactory, opponentSplashFactory, opponentNameScreenFactory, readyScreenFactory, goScreenFactory, attackScreenFactory, hpCompareFactory, endFightReactionFactory, endFightVitalsFactory)
         trainingScreenFactory = TrainingScreenFactory(vitalBoxFactory, bitmapScaler, backgroundHeight, trainingService, gameState)
-        backgroundTrainingScreenFactory = BackgroundTrainingScreenFactory(trainingScreenFactory, trainingService)
+        cardReceiver = CardReceiver(cardLoader, notificationChannelManager)
 
         transformationScreenFactory = TransformationScreenFactory(characterManager, backgroundHeight, firmwareManager, bitmapScaler, vitalBoxFactory, vbUpdater)
         partnerScreenComposable = PartnerScreenComposable(bitmapScaler, backgroundHeight, stepService, heartRateService)
@@ -209,6 +216,7 @@ class VitalWearApp : Application(), Configuration.Provider {
         applicationBootManager = ApplicationBootManager(characterManager as CharacterManagerImpl, firmwareManager, stepService, vbUpdater, moodService, notificationChannelManager, complicationRefreshService)
         cardReceiver = CardReceiver(cardLoader, notificationChannelManager)
         firmwareReceiver = FirmwareReceiver(firmwareManager, notificationChannelManager)
+        characterReceiver = CharacterReceiver(characterManager, adventureService, cardMetaEntityDao, database.speciesEntityDao())
         settingsComposableFactory = SettingsComposableFactory(backgroundManager, vitalBoxFactory, bitmapScaler, logSettings, saveService)
     }
 

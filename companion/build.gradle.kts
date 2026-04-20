@@ -64,6 +64,8 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(project(":common"))
+    implementation(project(":protos"))
+    implementation(libs.protobuf.javalite)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

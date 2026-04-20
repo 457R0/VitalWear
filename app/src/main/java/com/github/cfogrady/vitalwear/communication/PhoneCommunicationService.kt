@@ -59,6 +59,19 @@ class PhoneCommunicationService  : WearableListenerService() {
                     }
                 }
             }
+            ChannelTypes.CHARACTER_DATA -> {
+                CoroutineScope(Dispatchers.IO).launch {
+                    val result = (application as VitalWearApp).characterReceiver.importCharacterFromChannel(applicationContext, channel)
+                    val notificationChannelManager = (application as VitalWearApp).notificationChannelManager
+                    if(result.success) {
+                        val cardName = result.cardName ?: "Character"
+                        notificationChannelManager.sendGenericNotification(applicationContext, "$cardName Import Successful", "")
+                    } else {
+                        val cardName = result.cardName ?: "Character"
+                        notificationChannelManager.sendGenericNotification(applicationContext, "$cardName Import Failed", "")
+                    }
+                }
+            }
             ChannelTypes.FIRMWARE_DATA -> {
                 CoroutineScope(Dispatchers.IO).launch {
                     (application as VitalWearApp).firmwareReceiver.importFirmwareFromChannel(applicationContext, channel)
