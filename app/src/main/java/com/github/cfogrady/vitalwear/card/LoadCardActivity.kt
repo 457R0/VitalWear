@@ -23,7 +23,7 @@ class LoadCardActivity : ComponentActivity() {
         val cardReceiver = (application as VitalWearApp).cardReceiver
         setContent {
             val importState by cardReceiver.cardImportState.collectAsState()
-            val importProgress by cardReceiver.cardImportProgress.collectAsState()
+            val importProgress by cardReceiver.cardImportPercent.collectAsState()
             val cardName by cardReceiver.cardImportName.collectAsState()
 
             LaunchedEffect(importState) {

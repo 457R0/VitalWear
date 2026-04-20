@@ -124,7 +124,6 @@ class VitalWearApp : Application(), Configuration.Provider {
         super.onCreate()
 
 
-
         //TODO: Migrate sharedPreferences over to saveDataRepository
         saveDataRepository = SaveDataRepository(this.saveDataStore)
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(applicationContext)
@@ -186,15 +185,11 @@ class VitalWearApp : Application(), Configuration.Provider {
         backgroundHeight = imageScaler.calculateBackgroundHeight()
         bitmapScaler = BitmapScaler(imageScaler)
         scrollingNameFactory = ScrollingNameFactory(backgroundHeight, bitmapScaler)
-<<<<<<< HEAD
         vitalBoxFactory = VitalBoxFactory(
             imageScaler = imageScaler,
             width = ImageScaler.VB_WIDTH.toInt(),
             height = ImageScaler.VB_HEIGHT.toInt(),
         )
-=======
-        vitalBoxFactory = VitalBoxFactory(imageScaler)
->>>>>>> b88a756 (VBHelper transfer interop, fix VitalBox centering, fix AdventureMenuScreen preview)
         val opponentSplashFactory = OpponentSplashFactory(bitmapScaler)
         val opponentNameScreenFactory = OpponentNameScreenFactory(bitmapScaler, backgroundHeight, scrollingNameFactory)
         val readyScreenFactory = ReadyScreenFactory(bitmapScaler, backgroundHeight)
@@ -205,7 +200,7 @@ class VitalWearApp : Application(), Configuration.Provider {
         val endFightVitalsFactory = EndFightVitalsFactory(bitmapScaler, firmwareManager, backgroundManager, backgroundHeight)
         fightTargetFactory = FightTargetFactory(battleService, vitalBoxFactory, opponentSplashFactory, opponentNameScreenFactory, readyScreenFactory, goScreenFactory, attackScreenFactory, hpCompareFactory, endFightReactionFactory, endFightVitalsFactory)
         trainingScreenFactory = TrainingScreenFactory(vitalBoxFactory, bitmapScaler, backgroundHeight, trainingService, gameState)
-        cardReceiver = CardReceiver(cardLoader, notificationChannelManager)
+        backgroundTrainingScreenFactory = BackgroundTrainingScreenFactory(trainingScreenFactory, trainingService)
 
         transformationScreenFactory = TransformationScreenFactory(characterManager, backgroundHeight, firmwareManager, bitmapScaler, vitalBoxFactory, vbUpdater)
         partnerScreenComposable = PartnerScreenComposable(bitmapScaler, backgroundHeight, stepService, heartRateService)
