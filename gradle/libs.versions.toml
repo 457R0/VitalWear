@@ -9,7 +9,6 @@ composeActivity = "1.10.0"
 coilCompose = "2.2.2"
 composeWear = "1.4.0"
 concurrentFuturesKtx = "1.2.0"
-connections = "0.1.0"
 coreKtx = "1.15.0"
 dimReader = "2.1.0.1-231156d"
 espressoCore = "3.6.1"
@@ -25,7 +24,6 @@ lifecycleService = "2.8.7"
 material = "1.12.0"
 material3 = "1.3.1"
 percentlayout = "1.0.0"
-playServicesNearby = "19.3.0"
 playServicesWearable = "19.0.0"
 preferenceKtx = "1.2.1"
 protobufGradlePlugin = "0.9.4"
@@ -76,15 +74,12 @@ androidx-work-runtime = { module = "androidx.work:work-runtime", version.ref = "
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntime" }
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coilCompose" }
 coil-gif = { module = "io.coil-kt:coil-gif", version.ref = "coilCompose" }
-connections = { module = "com.github.cfogrady.nearby.connections.p2p:connections", version.ref = "connections" }
-connections-wear-ui = { module = "com.github.cfogrady.nearby.connections.p2p:wear-ui", version.ref = "connections" }
 dim-reader = { module = "com.github.cfogrady:vb-dim-reader", version.ref = "dimReader" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutinesPlayServices" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
 material = { module = "com.google.android.material:material", version.ref = "material" }
-play-services-nearby = { module = "com.google.android.gms:play-services-nearby", version.ref = "playServicesNearby" }
 play-services-wearable = { module = "com.google.android.gms:play-services-wearable", version.ref = "playServicesWearable" }
 protobuf-javalite = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobufJavalite" }
 room-compile = { module = "androidx.room:room-compiler", version.ref = "room" }

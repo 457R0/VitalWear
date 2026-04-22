@@ -117,7 +117,13 @@ fun MainScreen(controller: MainScreenController) {
                             .clickable {
                                 controller.launchTransferActivity()
                             }, contentAlignment = Alignment.Center) {
+                            val menuIconSize = bitmapScaler.scaledDimension(controller.menuBitmaps.settingsIcon.width)
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.vbh_vw_app_icon),
+                                    contentDescription = "VBH-VW",
+                                    modifier = Modifier.size(menuIconSize)
+                                )
                                 Text(text = "TRANSFER",  fontWeight = FontWeight.Bold, fontSize = 3.em)
                             }
                         }

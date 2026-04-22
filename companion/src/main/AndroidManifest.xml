@@ -24,15 +24,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity
-            android:name="com.github.cfogrady.vitalwear.transfer.CharacterImportActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="application/x-vitalwear-character" />
-            </intent-filter>
-        </activity>
+        <activity android:name="com.github.cfogrady.vitalwear.transfer.CharacterImportActivity" android:exported="false" />
         <activity android:name="com.github.cfogrady.vitalwear.card.ImportCardActivity"/>
         <activity android:name="com.github.cfogrady.vitalwear.card.ValidateCardActivity"/>
         <activity android:name="com.github.cfogrady.vitalwear.firmware.FirmwareImportActivity"/>

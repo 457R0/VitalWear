@@ -6,6 +6,7 @@ import com.github.cfogrady.vitalwear.character.CharacterManager
 import com.github.cfogrady.vitalwear.character.data.CharacterState
 import com.github.cfogrady.vitalwear.common.card.db.CardMetaEntityDao
 import com.github.cfogrady.vitalwear.common.card.db.SpeciesEntityDao
+import com.github.cfogrady.vitalwear.common.data.SharedTransferSeenDao
 import com.github.cfogrady.vitalwear.protos.Character
 import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.Wearable
@@ -19,6 +20,7 @@ class CharacterReceiver(
     private val adventureService: AdventureService,
     private val cardMetaEntityDao: CardMetaEntityDao,
     private val speciesEntityDao: SpeciesEntityDao,
+    private val transferSeenDao: SharedTransferSeenDao,
 ) {
     data class ImportCharacterResult(val success: Boolean, val cardName: String?)
 
@@ -31,13 +33,14 @@ class CharacterReceiver(
             channelClient.getInputStream(channel).await().use { input ->
                 try {
                     val character = Character.parseFrom(input).sanitizeForImport()
-                    val matchedCard = character.resolveImportedCardMeta(cardMetaEntityDao)
+                    val matchedCard = character.resolveImportedCardMeta(cardMetaEntityDao, speciesEntityDao)
                     importedCardName = matchedCard?.cardName ?: character.cardName
                     val validationError = character.validateForImport(cardMetaEntityDao, speciesEntityDao, matchedCard)
                     if (validationError != null) {
                         Timber.i("Rejecting character import: $validationError")
                     } else {
-                        val importCharacter = character.withCardName(matchedCard!!.cardName)
+                        val importCharacter = character.remapImportedRootCardName(matchedCard!!.cardName)
+                        transferSeenDao.recordImportedCharacterSeen(importCharacter, System.currentTimeMillis())
                         val characterId = characterManager.addCharacter(
                             importCharacter.cardName,
                             importCharacter.characterStats.toCharacterEntity(importCharacter.cardName),

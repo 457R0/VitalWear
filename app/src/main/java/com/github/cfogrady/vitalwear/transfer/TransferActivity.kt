@@ -2,14 +2,12 @@ package com.github.cfogrady.vitalwear.transfer
 
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
 
 import androidx.compose.ui.unit.Dp
-import com.github.cfogrady.nearby.connections.p2p.NearbyP2PConnection
 import com.github.cfogrady.vitalwear.VitalWearApp
 import com.github.cfogrady.vitalwear.adventure.AdventureService
 import com.github.cfogrady.vitalwear.character.CharacterManager
@@ -25,8 +23,10 @@ import com.github.cfogrady.vitalwear.composable.util.BitmapScaler
 import com.github.cfogrady.vitalwear.composable.util.VitalBoxFactory
 import com.github.cfogrady.vitalwear.protos.Character
 import com.github.cfogrady.vitalwear.settings.CharacterSettings
+import com.github.cfogrady.vitalwear.transfer.hce.VitalWearHceSessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.LocalDateTime
+import com.github.cfogrady.vitalwear.common.character.CharacterSprites
 
 class TransferActivity: ComponentActivity(), TransferScreenController {
 
@@ -39,33 +39,20 @@ class TransferActivity: ComponentActivity(), TransferScreenController {
         get() = (application as VitalWearApp).cardMetaEntityDao
     private val speciesEntityDao: SpeciesEntityDao
         get() = (application as VitalWearApp).database.speciesEntityDao()
+    private val transferSeenDao
+        get() = (application as VitalWearApp).sharedTransferSeenDao
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val missingPermissions = NearbyP2PConnection.getMissingPermissions(this)
-        if(missingPermissions.isNotEmpty()) {
-            buildPermissionRequestLauncher { requestedPermissions->
-                val deniedPermissions = mutableListOf<String>()
-                for(requestedPermission in requestedPermissions) {
-                    if(!requestedPermission.value) {
-                        deniedPermissions.add(requestedPermission.key)
-                    }
-                }
-                if(deniedPermissions.isNotEmpty()) {
-                    Toast.makeText(this, "Permission Required For Transfers", Toast.LENGTH_SHORT).show()
-                    finish()
-                }
-            }.launch(missingPermissions.toTypedArray())
-        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent {
             TransferScreen(this)
         }
     }
 
-    private fun buildPermissionRequestLauncher(resultBehavior: (Map<String, Boolean>)->Unit): ActivityResultLauncher<Array<String>> {
-        val multiplePermissionsContract = ActivityResultContracts.RequestMultiplePermissions()
-        val launcher = registerForActivityResult(multiplePermissionsContract, resultBehavior)
-        return launcher
+    override fun onDestroy() {
+        VitalWearHceSessionManager.clear()
+        super.onDestroy()
     }
 
     //------------------------------- Controller Members ---------------------------------------//
@@ -86,9 +73,6 @@ class TransferActivity: ComponentActivity(), TransferScreenController {
         }
     }
 
-    override fun getCharacterTransfer(): CharacterTransfer {
-        return CharacterTransfer.getInstance(this)
-    }
 
     override suspend fun getActiveCharacterProto(): Character? {
         val activeCharacter = characterManager.getCurrentCharacter()
@@ -112,13 +96,15 @@ class TransferActivity: ComponentActivity(), TransferScreenController {
 
     override suspend fun receiveCharacter(character: Character): Boolean {
         val sanitizedCharacter = character.sanitizeForImport()
-        val matchedCard = sanitizedCharacter.resolveImportedCardMeta(cardMetaEntityDao)
+        val matchedCard = sanitizedCharacter.resolveImportedCardMeta(cardMetaEntityDao, speciesEntityDao)
         val validationError = sanitizedCharacter.validateForImport(cardMetaEntityDao, speciesEntityDao, matchedCard)
         if (validationError != null) {
             lastReceiedCharacter.emit(null)
             return false
         }
-        val importCharacter = sanitizedCharacter.withCardName(matchedCard!!.cardName)
+        val importCharacter = sanitizedCharacter.remapImportedRootCardName(matchedCard!!.cardName)
+        val seenTimestamp = System.currentTimeMillis()
+        transferSeenDao.recordImportedCharacterSeen(importCharacter, seenTimestamp)
         val characterId = characterManager.addCharacter(
             importCharacter.cardName,
             importCharacter.characterStats.toCharacterEntity(importCharacter.cardName),
@@ -134,7 +120,15 @@ class TransferActivity: ComponentActivity(), TransferScreenController {
     }
 
     override fun getLastReceivedCharacterSprites(): TransferScreenController.ReceiveCharacterSprites {
-        return lastReceiedCharacter.value!!
+        lastReceiedCharacter.value?.let {
+            return it
+        }
+        val activeCharacter = characterManager.getCurrentCharacter()
+            ?: throw IllegalStateException("No received character sprites are available")
+        return TransferScreenController.ReceiveCharacterSprites(
+            idle = activeCharacter.characterSprites.sprites[CharacterSprites.IDLE_1],
+            happy = activeCharacter.characterSprites.sprites[CharacterSprites.WIN],
+        )
     }
 }
 
@@ -259,7 +253,7 @@ fun Character.Settings.toCharacterSettings(): CharacterSettings {
 fun Character.validateForImport(
     cardMetaEntityDao: CardMetaEntityDao,
     speciesEntityDao: SpeciesEntityDao,
-    matchedCard: CardMetaEntity? = this.resolveImportedCardMeta(cardMetaEntityDao)
+    matchedCard: CardMetaEntity? = this.resolveImportedCardMeta(cardMetaEntityDao, speciesEntityDao)
 ): String? {
     if (this.cardName.isBlank()) {
         if (this.cardId <= 0) {
@@ -285,7 +279,8 @@ fun Character.validateForImport(
 
     val speciesExists = runCatching {
         speciesEntityDao.getCharacterByCardAndCharacterId(matchedCard.cardName, this.characterStats.slotId)
-    }.isSuccess
+        true
+    }.getOrDefault(false)
     if (!speciesExists) {
         return "Slot ${this.characterStats.slotId} does not exist on ${matchedCard.cardName}"
     }
@@ -293,25 +288,141 @@ fun Character.validateForImport(
     return null
 }
 
-fun Character.resolveImportedCardMeta(cardMetaEntityDao: CardMetaEntityDao): CardMetaEntity? {
-    val byName = this.cardName.takeIf { it.isNotBlank() }?.let { cardMetaEntityDao.getByName(it) }
-    if (byName != null && (this.cardId <= 0 || byName.cardId == this.cardId)) {
-        return byName
+fun Character.resolveImportedCardMeta(
+    cardMetaEntityDao: CardMetaEntityDao,
+    speciesEntityDao: SpeciesEntityDao? = null
+): CardMetaEntity? {
+    val allCards = cardMetaEntityDao.getAll()
+    return selectImportedCardMeta(
+        candidates = allCards,
+        incomingCardName = this.cardName,
+        incomingCardId = this.cardId,
+        slotId = this.characterStats.slotId,
+        hasSlot = { candidate, slotId ->
+            speciesEntityDao?.let {
+                runCatching {
+                    it.getCharacterByCardAndCharacterId(candidate.cardName, slotId)
+                    true
+                }.getOrDefault(false)
+            } ?: false
+        }
+    )
+}
+
+internal fun selectImportedCardMeta(
+    candidates: List<CardMetaEntity>,
+    incomingCardName: String,
+    incomingCardId: Int,
+    slotId: Int,
+    hasSlot: (CardMetaEntity, Int) -> Boolean,
+): CardMetaEntity? {
+    val requestedName = incomingCardName.takeIf { it.isNotBlank() }
+    val idMatches = if (incomingCardId > 0) {
+        candidates.filter { it.cardId == incomingCardId }
+    } else {
+        emptyList()
     }
-    if (this.cardId <= 0) {
-        return null
+
+    requestedName?.let { requestedNameValue ->
+        candidates.firstOrNull {
+            it.cardName == requestedNameValue && (incomingCardId <= 0 || it.cardId == incomingCardId)
+        }?.let { return it }
+
+        val exactIgnoreCaseMatches = candidates.filter {
+            it.cardName.equals(requestedNameValue, ignoreCase = true) && (incomingCardId <= 0 || it.cardId == incomingCardId)
+        }
+        if (exactIgnoreCaseMatches.size == 1) {
+            return exactIgnoreCaseMatches.single()
+        }
     }
-    val matchesById = cardMetaEntityDao.getAll().filter { it.cardId == this.cardId }
-    return matchesById.singleOrNull()
+
+    if (idMatches.size == 1) {
+        return idMatches.single()
+    }
+
+    val slotFilteredIdMatches = idMatches.filter { slotId >= 0 && hasSlot(it, slotId) }
+    if (slotFilteredIdMatches.size == 1) {
+        return slotFilteredIdMatches.single()
+    }
+
+    requestedName?.let { requestedNameValue ->
+        val normalizedNameMatches = candidates.filter {
+            cardNamesMatch(it.cardName, requestedNameValue) && (incomingCardId <= 0 || it.cardId == incomingCardId)
+        }
+        if (normalizedNameMatches.size == 1) {
+            return normalizedNameMatches.single()
+        }
+        val slotFilteredNameMatches = normalizedNameMatches.filter { slotId >= 0 && hasSlot(it, slotId) }
+        if (slotFilteredNameMatches.size == 1) {
+            return slotFilteredNameMatches.single()
+        }
+    }
+
+    requestedName?.let { requestedNameValue ->
+        val normalizedIdMatches = idMatches.filter { cardNamesMatch(it.cardName, requestedNameValue) }
+        if (normalizedIdMatches.size == 1) {
+            return normalizedIdMatches.single()
+        }
+    }
+
+    return null
+}
+
+private fun cardNamesMatch(left: String, right: String): Boolean {
+    return left.equals(right, ignoreCase = true) || left.toNormalizedCardLookupKey() == right.toNormalizedCardLookupKey()
+}
+
+private fun String.toNormalizedCardLookupKey(): String {
+    return lowercase().filter { it.isLetterOrDigit() }
+}
+
+fun Character.remapImportedRootCardName(cardName: String): Character {
+    val originalRootCardName = this.cardName
+    val remappedTransformationHistory = this.transformationHistoryList.map { transformation ->
+        if (transformation.cardName.shouldRemapToRootCard(originalRootCardName)) {
+            Character.TransformationEvent.newBuilder(transformation)
+                .setCardName(cardName)
+                .build()
+        } else {
+            transformation
+        }
+    }
+    val remappedAdventureProgress = linkedMapOf<String, Int>()
+    for ((adventureCardName, progress) in this.maxAdventureCompletedByCardMap) {
+        val remappedCardName = if (adventureCardName.shouldRemapToRootCard(originalRootCardName)) {
+            cardName
+        } else {
+            adventureCardName
+        }
+        val previousProgress = remappedAdventureProgress[remappedCardName]
+        remappedAdventureProgress[remappedCardName] = previousProgress?.coerceAtLeast(progress) ?: progress
+    }
+
+    if (this.cardName == cardName &&
+        remappedTransformationHistory == this.transformationHistoryList &&
+        remappedAdventureProgress == this.maxAdventureCompletedByCardMap
+    ) {
+        return this
+    }
+
+    return Character.newBuilder(this)
+        .setCardName(cardName)
+        .clearTransformationHistory()
+        .addAllTransformationHistory(remappedTransformationHistory)
+        .clearMaxAdventureCompletedByCard()
+        .putAllMaxAdventureCompletedByCard(remappedAdventureProgress)
+        .build()
 }
 
 fun Character.withCardName(cardName: String): Character {
-    if (this.cardName == cardName) {
-        return this
+    return remapImportedRootCardName(cardName)
+}
+
+private fun String.shouldRemapToRootCard(originalRootCardName: String): Boolean {
+    if (this.isBlank() || originalRootCardName.isBlank()) {
+        return false
     }
-    return Character.newBuilder(this)
-        .setCardName(cardName)
-        .build()
+    return cardNamesMatch(this, originalRootCardName)
 }
 
 fun Character.sanitizeForImport(): Character {

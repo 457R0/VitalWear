@@ -38,19 +38,21 @@ import com.github.cfogrady.vitalwear.common.card.CardSpritesIO
 import com.github.cfogrady.vitalwear.common.card.CharacterSpritesIO
 import com.github.cfogrady.vitalwear.common.card.SpriteBitmapConverter
 import com.github.cfogrady.vitalwear.common.card.SpriteFileIO
+import com.github.cfogrady.vitalwear.common.data.SharedTransferSeenDao
 import com.github.cfogrady.vitalwear.common.data.migrations.CreateAndPopulateMaxAdventureCompletionCardMeta
-import com.github.cfogrady.vitalwear.data.AppDatabase
 import com.github.cfogrady.vitalwear.complications.ComplicationRefreshService
 import com.github.cfogrady.vitalwear.complications.PartnerComplicationState
 import com.github.cfogrady.vitalwear.composable.util.BitmapScaler
 import com.github.cfogrady.vitalwear.composable.util.ScrollingNameFactory
 import com.github.cfogrady.vitalwear.composable.util.VitalBoxFactory
 import com.github.cfogrady.vitalwear.data.GameState
+import com.github.cfogrady.vitalwear.data.AppDatabase
 import com.github.cfogrady.vitalwear.log.LogSettings
 import com.github.cfogrady.vitalwear.common.log.TinyLogTree
 import com.github.cfogrady.vitalwear.firmware.FirmwareManager
 import com.github.cfogrady.vitalwear.firmware.FirmwareReceiver
 import com.github.cfogrady.vitalwear.transfer.CharacterReceiver
+import com.github.cfogrady.vitalwear.transfer.data.OwnerTransferSeenDao
 import com.github.cfogrady.vitalwear.firmware.PostFirmwareLoader
 import com.github.cfogrady.vitalwear.heartrate.HeartRateService
 import com.github.cfogrady.vitalwear.notification.NotificationChannelManager
@@ -88,6 +90,7 @@ class VitalWearApp : Application(), Configuration.Provider {
     lateinit var cardMetaEntityDao: CardMetaEntityDao
     lateinit var cardLoader: AppCardLoader
     lateinit var database : AppDatabase
+    lateinit var sharedTransferSeenDao: SharedTransferSeenDao
     lateinit var characterManager: CharacterManager
     lateinit var previewCharacterManager: PreviewCharacterManager
     lateinit var battleService: BattleService
@@ -153,6 +156,7 @@ class VitalWearApp : Application(), Configuration.Provider {
         //TODO: Remove allowMainThread before release
         database = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "VitalWear")
             .addMigrations(CreateAndPopulateMaxAdventureCompletionCardMeta()).allowMainThreadQueries().build()
+        sharedTransferSeenDao = OwnerTransferSeenDao(applicationContext)
         backgroundManager = BackgroundManager(cardSpriteIO, sharedPreferences)
         val postFirmwareLoader = PostFirmwareLoader(backgroundManager)
         firmwareManager = FirmwareManager(spriteBitmapConverter, postFirmwareLoader)
@@ -211,7 +215,7 @@ class VitalWearApp : Application(), Configuration.Provider {
         applicationBootManager = ApplicationBootManager(characterManager as CharacterManagerImpl, firmwareManager, stepService, vbUpdater, moodService, notificationChannelManager, complicationRefreshService)
         cardReceiver = CardReceiver(cardLoader, notificationChannelManager)
         firmwareReceiver = FirmwareReceiver(firmwareManager, notificationChannelManager)
-        characterReceiver = CharacterReceiver(characterManager, adventureService, cardMetaEntityDao, database.speciesEntityDao())
+        characterReceiver = CharacterReceiver(characterManager, adventureService, cardMetaEntityDao, database.speciesEntityDao(), sharedTransferSeenDao)
         settingsComposableFactory = SettingsComposableFactory(backgroundManager, vitalBoxFactory, bitmapScaler, logSettings, saveService)
     }
 

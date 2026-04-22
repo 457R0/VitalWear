@@ -7,4 +7,12 @@
     <string name="hello_world">Hello Square World!</string>
     <string name="tile_description">Vital Wear Tile</string>
     <string name="transfer_button">Transfer</string>
+    <string name="transfer_title_app_link">VBH-VW LINK</string>
+    <string name="transfer_button_send_to_vbh">VW to VBH</string>
+    <string name="transfer_button_receive_from_vbh">VBH to VW</string>
+    <string name="transfer_waiting_send">Ready to send. Tap phone (Watch to VBH).</string>
+    <string name="transfer_waiting_receive">Ready to receive. Tap phone (VBH to Watch).</string>
+    <string name="transfer_waiting_success">Transfer complete</string>
+    <string name="transfer_waiting_failure">Transfer failed</string>
+    <string name="transfer_waiting_preparing">Preparing App Link...</string>
 </resources>

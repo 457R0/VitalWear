@@ -18,8 +18,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH"/>
     <!-- post notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="com.github.nacabaro.vbhelper.permission.ACCESS_TRANSFER_SEEN" />
 
     <uses-feature android:name="android.hardware.type.watch" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+    <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
 
     <application
         android:name=".VitalWearApp"
@@ -66,6 +70,7 @@
         <activity
             android:name=".main.MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:taskAffinity="">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -90,6 +95,7 @@
         <activity android:name=".training.TrainingActivity"
             android:taskAffinity="" />
         <activity android:name=".transfer.TransferActivity"
+            android:launchMode="singleTop"
             android:taskAffinity="" />
         <activity android:name=".settings.CharacterSettingsActivity"
             android:taskAffinity="" />
@@ -175,6 +181,18 @@
                 <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
                  <data android:scheme="wear" android:host="*"/>
             </intent-filter>
+        </service>
+        <service
+            android:name=".transfer.hce.VitalWearHostApduService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/vitalwear_hce_service" />
         </service>
         <receiver
             android:name=".BootReceiver"

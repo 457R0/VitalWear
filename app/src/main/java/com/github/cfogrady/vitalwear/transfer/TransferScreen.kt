@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -22,12 +21,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.wear.compose.material3.CompactButton
 import androidx.wear.compose.material3.Text
 import androidx.wear.tooling.preview.devices.WearDevices
-import com.github.cfogrady.nearby.connections.p2p.wear.ui.DisplayMatchingDevices
+import com.github.cfogrady.vitalwear.R
 import com.github.cfogrady.vitalwear.character.VBCharacter
 import com.github.cfogrady.vitalwear.common.card.CardSpriteLoader
 import com.github.cfogrady.vitalwear.common.character.CharacterSprites
@@ -36,21 +36,15 @@ import com.github.cfogrady.vitalwear.composable.util.ImageScaler
 import com.github.cfogrady.vitalwear.composable.util.VitalBoxFactory
 import com.github.cfogrady.vitalwear.firmware.Firmware
 import com.github.cfogrady.vitalwear.protos.Character
+import com.github.cfogrady.vitalwear.transfer.hce.VitalWearHceSessionManager
 import com.github.cfogrady.vitalwear.transfer.TransferScreenController.ReceiveCharacterSprites
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class TransferState {
     ENTRY,
-    FIND_DEVICES,
-    CONNECTED,
+    WAITING,
     TRANSFERRED,
 }
 
@@ -59,12 +53,16 @@ enum class SendOrReceive {
     RECEIVE
 }
 
+enum class HceTransferResult {
+    TRANSFERRING,
+    SUCCESS,
+    FAILURE,
+}
+
 interface TransferScreenController: SendAnimationController, ReceiveAnimationController {
     fun endActivityWithToast(msg: String)
 
     suspend fun getActiveCharacterProto(): Character?
-
-    fun getCharacterTransfer(): CharacterTransfer
 
     fun getActiveCharacter(): VBCharacter?
 
@@ -81,55 +79,56 @@ interface TransferScreenController: SendAnimationController, ReceiveAnimationCon
 @Composable
 fun TransferScreen(controller: TransferScreenController) {
     val coroutineScope = rememberCoroutineScope()
-    val characterTransfer = remember {
-        controller.getCharacterTransfer()
-    }
+    val hceStatus by VitalWearHceSessionManager.transferStatus.collectAsState()
     var state by remember { mutableStateOf(TransferState.ENTRY) }
     var sendOrReceive by remember { mutableStateOf(SendOrReceive.SEND) }
-    var result = remember { MutableStateFlow(CharacterTransfer.Result.TRANSFERRING) }
+    var resultStatus by remember { mutableStateOf(HceTransferResult.TRANSFERRING) }
     when(state) {
         TransferState.ENTRY -> SelectSendOrReceive(onSelect = {
-            sendOrReceive = it
-            state = TransferState.FIND_DEVICES
-        })
-        TransferState.FIND_DEVICES -> FindDevices(characterTransfer) {
-            if(sendOrReceive == SendOrReceive.SEND) {
-                CoroutineScope(Dispatchers.IO).launch {
+            if (it == SendOrReceive.SEND) {
+                coroutineScope.launch(Dispatchers.IO) {
                     val character = controller.getActiveCharacterProto()
-                    if(character == null) {
-                        characterTransfer.close()
-                        controller.endActivityWithToast("No active character!")
+                    if (character == null) {
+                        controller.endActivityWithToast("No active character to send!")
                     } else {
-                        val transferResult = characterTransfer.sendCharacterToDevice(it, character)
-                        coroutineScope.launch {
-                            transferResult.collect{ transferResultValue ->
-                                result.update { transferResultValue }
-                            }
-                        }
+                        VitalWearHceSessionManager.armSend(character.toByteArray())
+                        sendOrReceive = it
+                        state = TransferState.WAITING
                     }
                 }
             } else {
-                val transferResult = characterTransfer.receiveCharacterFrom(it, controller::receiveCharacter)
-                coroutineScope.launch {
-                    transferResult.collect{ transferResultValue ->
-                        result.update { transferResultValue }
+                VitalWearHceSessionManager.armReceive()
+                sendOrReceive = it
+                state = TransferState.WAITING
+            }
+        })
+        TransferState.WAITING -> {
+            LaunchedEffect(hceStatus) {
+                when (hceStatus) {
+                    VitalWearHceSessionManager.TransferStatus.SUCCESS -> {
+                        resultStatus = HceTransferResult.SUCCESS
+                        state = TransferState.TRANSFERRED
                     }
+                    VitalWearHceSessionManager.TransferStatus.FAILURE -> {
+                        resultStatus = HceTransferResult.FAILURE
+                        state = TransferState.TRANSFERRED
+                    }
+                    else -> {}
                 }
             }
-            state = TransferState.CONNECTED
-        }
-        TransferState.CONNECTED -> {
-            val connectionStatus by result.collectAsState()
-            if(connectionStatus == CharacterTransfer.Result.TRANSFERRING) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Transferring...")
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                val msg = when (hceStatus) {
+                    VitalWearHceSessionManager.TransferStatus.ARMED_SEND -> stringResource(R.string.transfer_waiting_send)
+                    VitalWearHceSessionManager.TransferStatus.ARMED_RECEIVE -> stringResource(R.string.transfer_waiting_receive)
+                    VitalWearHceSessionManager.TransferStatus.SUCCESS -> stringResource(R.string.transfer_waiting_success)
+                    VitalWearHceSessionManager.TransferStatus.FAILURE -> stringResource(R.string.transfer_waiting_failure)
+                    VitalWearHceSessionManager.TransferStatus.IDLE -> stringResource(R.string.transfer_waiting_preparing)
                 }
-            } else {
-                state = TransferState.TRANSFERRED
+                Text(msg)
             }
         }
         TransferState.TRANSFERRED -> {
-            TransferResult(controller, sendOrReceive, result, onComplete = controller::finish)
+            TransferResult(controller, sendOrReceive, resultStatus, onComplete = controller::finish)
         }
     }
 }
@@ -143,110 +142,43 @@ fun TransferScreen(controller: TransferScreenController) {
 @Composable
 fun SelectSendOrReceive(onSelect: (SendOrReceive) -> Unit = {}) {
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(stringResource(R.string.transfer_title_app_link))
         CompactButton(onClick = {onSelect.invoke(SendOrReceive.SEND)}) {
-            Text("Send Character")
+            Text(stringResource(R.string.transfer_button_send_to_vbh))
         }
         CompactButton(onClick = {onSelect.invoke(SendOrReceive.RECEIVE)}) {
-            Text("Receive Character")
+            Text(stringResource(R.string.transfer_button_receive_from_vbh))
         }
     }
 }
 
 @Composable
-fun FindDevices(characterTransfer: CharacterTransfer, onDeviceFound: (String)->Unit) {
-    val discoveredDevices = remember { MutableSharedFlow<String>() }
-    val coroutineScope = rememberCoroutineScope()
-    var connected by remember { mutableStateOf(false) }
-    DisposableEffect(true) {
-        coroutineScope.launch {
-            characterTransfer.searchForOtherTransferDevices().collect {
-                discoveredDevices.emit(it)
-            }
-        }
-
-        onDispose {
-            if(!connected) {
-                characterTransfer.close()
-            }
-        }
-    }
-    DisplayMatchingDevices(characterTransfer.deviceName, discoveredDevices, rescan = {
-        connected = false
-        characterTransfer.close()
-        characterTransfer.searchForOtherTransferDevices()
-    }, selectDevice = {
-        connected = true
-        onDeviceFound.invoke(it)
-    })
-}
-
-@Preview(
-    device = WearDevices.LARGE_ROUND,
-    showSystemUi = true,
-    backgroundColor = 0xff000000,
-    showBackground = true
-)
-@Composable
-private fun FindDevicesPreview() {
-    val foundDevices = MutableSharedFlow<String>()
-    val characterTransfer = object: CharacterTransfer {
-        override val deviceName: String = "TEST"
-        override fun searchForOtherTransferDevices(): Flow<String> {
-            return foundDevices
-        }
-        override fun close() {}
-        override fun receiveCharacterFrom(
-            senderName: String,
-            receive: suspend (Character) -> Boolean
-        ): StateFlow<CharacterTransfer.Result> {
-            return MutableStateFlow(CharacterTransfer.Result.TRANSFERRING)
-        }
-        override fun sendCharacterToDevice(
-            senderName: String,
-            character: Character
-        ): StateFlow<CharacterTransfer.Result> {
-            return MutableStateFlow(CharacterTransfer.Result.TRANSFERRING)
-        }
-    }
-    LaunchedEffect(true) {
-        delay(250)
-        foundDevices.emit("ONE")
-        delay(500)
-        foundDevices.emit("TWO")
-        delay(500)
-        foundDevices.emit("THREE")
-        delay(500)
-        foundDevices.emit("FOUR")
-        delay(500)
-        foundDevices.emit("FIVE")
-    }
-    FindDevices(characterTransfer) { }
-}
-
-@Composable
-fun TransferResult(controller: TransferScreenController, sendOrReceive: SendOrReceive, resultStatusFlow: StateFlow<CharacterTransfer.Result>, onComplete: () -> Unit) {
-    val resultStatus = remember { resultStatusFlow.value }
+fun TransferResult(controller: TransferScreenController, sendOrReceive: SendOrReceive, resultStatus: HceTransferResult, onComplete: () -> Unit) {
     when(resultStatus) {
-        CharacterTransfer.Result.TRANSFERRING -> {
+        HceTransferResult.TRANSFERRING -> {
             throw IllegalStateException("Shouldn't be looking at result is the status is still Trasnferring")
         }
-        CharacterTransfer.Result.SUCCESS -> {
+        HceTransferResult.SUCCESS -> {
             if(sendOrReceive == SendOrReceive.SEND) {
-                val activeCharacter = controller.getActiveCharacter()!!
-                LaunchedEffect(true) {
-                    controller.deleteActiveCharacter()
+                val activeCharacter = controller.getActiveCharacter()
+                if (activeCharacter == null) {
+                    // Source may already be removed at protocol COMMIT time for move semantics.
+                    LaunchedEffect(true) {
+                        onComplete.invoke()
+                    }
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.transfer_waiting_success))
+                    }
+                } else {
+                    val idle = activeCharacter.characterSprites.sprites[CharacterSprites.IDLE_1]
+                    val walk = activeCharacter.characterSprites.sprites[CharacterSprites.WALK_1]
+                    SendAnimation(controller, idleBitmap = idle, walkBitmap = walk) { onComplete() }
                 }
-                val idle = activeCharacter.characterSprites.sprites[CharacterSprites.IDLE_1]
-                val walk = activeCharacter.characterSprites.sprites[CharacterSprites.WALK_1]
-                SendAnimation(controller, idleBitmap = idle, walkBitmap = walk) { onComplete() }
             } else {
                 ReceiveAnimation(controller) { onComplete() }
             }
         }
-        CharacterTransfer.Result.REJECTED -> {
-            controller.endActivityWithToast("Transfer Rejected!")
-        }
-        CharacterTransfer.Result.FAILURE -> {
+        HceTransferResult.FAILURE -> {
             controller.endActivityWithToast("Transfer Failed!")
         }
     }

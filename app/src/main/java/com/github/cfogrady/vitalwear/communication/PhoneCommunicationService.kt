@@ -61,15 +61,13 @@ class PhoneCommunicationService  : WearableListenerService() {
             }
             ChannelTypes.CHARACTER_DATA -> {
                 CoroutineScope(Dispatchers.IO).launch {
-                    val result = (application as VitalWearApp).characterReceiver.importCharacterFromChannel(applicationContext, channel)
+                    Wearable.getChannelClient(applicationContext).close(channel).await()
                     val notificationChannelManager = (application as VitalWearApp).notificationChannelManager
-                    if(result.success) {
-                        val cardName = result.cardName ?: "Character"
-                        notificationChannelManager.sendGenericNotification(applicationContext, "$cardName Import Successful", "")
-                    } else {
-                        val cardName = result.cardName ?: "Character"
-                        notificationChannelManager.sendGenericNotification(applicationContext, "$cardName Import Failed", "")
-                    }
+                    notificationChannelManager.sendGenericNotification(
+                        applicationContext,
+                        "Character Transfer Not Supported",
+                        "Use watch Transfer mode for Digimon transfer."
+                    )
                 }
             }
             ChannelTypes.FIRMWARE_DATA -> {

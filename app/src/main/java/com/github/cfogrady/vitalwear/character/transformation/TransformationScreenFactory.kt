@@ -56,7 +56,7 @@ class TransformationScreenFactory(
         var character by remember(initialCharacter) { mutableStateOf(initialCharacter) }
         val transformation = remember(initialCharacter) { initialCharacter.popTransformationOption() }
         val coroutineScope = rememberCoroutineScope()
-        var confirmEvolution by remember { mutableStateOf(false) }
+        var evolutionConfirmed by remember { mutableStateOf(false) }
         var applyingTransformation by remember { mutableStateOf(false) }
         var transformationApplied by remember { mutableStateOf(false) }
         var finished by remember { mutableStateOf(false) }
@@ -94,46 +94,42 @@ class TransformationScreenFactory(
             }
         }
 
-        val executeTransformation: (Boolean) -> Unit = { finishImmediately ->
-            if (applyingTransformation) {
-                Unit
-            } else if (transformationApplied) {
-                if (finishImmediately) {
-                    finishOnce.invoke()
-                } else {
-                    transformationProgress = TransformationState.SPLASH
-                }
-            } else {
-                applyingTransformation = true
-                coroutineScope.launch {
-                    character = withContext(Dispatchers.IO) {
-                        characterManager.doActiveCharacterTransformation(context, transformation)
-                    }
-                    transformationApplied = true
-                    applyingTransformation = false
-                    if (finishImmediately) {
-                        finishOnce.invoke()
-                    } else {
-                        transformationProgress = TransformationState.SPLASH
-                    }
-                }
-            }
-        }
-
-        LaunchedEffect(confirmEvolution) {
-            if (confirmEvolution) {
-                executeTransformation(true)
-            }
-        }
+        val executeTransformation: () -> Unit = {
+             if (applyingTransformation) {
+                 Unit
+             } else if (transformationApplied) {
+                transformationProgress = TransformationState.SPLASH
+             } else {
+                 applyingTransformation = true
+                 coroutineScope.launch {
+                     character = withContext(Dispatchers.IO) {
+                         characterManager.doActiveCharacterTransformation(context, transformation)
+                     }
+                     transformationApplied = true
+                     applyingTransformation = false
+                     transformationProgress = TransformationState.SPLASH
+                 }
+             }
+         }
 
         vitalBoxFactory.VitalBox {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clickable {
-                        // Tap confirms the evolution and skips the rest of the animation sequence.
-                        confirmEvolution = true
-                    }
+                        when {
+                            // During pre-transform animation, tap confirms and proceeds to NEW_CHARACTER.
+                            !evolutionConfirmed && (transformationProgress == TransformationState.FUSION_PAIR || transformationProgress == TransformationState.POWER_INCREASING) -> {
+                                evolutionConfirmed = true
+                                transformationProgress = TransformationState.NEW_CHARACTER
+                            }
+                            // After transformation is applied, allow tapping to skip forward to light animation.
+                            transformationApplied && transformationProgress != TransformationState.LIGHT_OF_TRANSFORMATION -> {
+                                transformationProgress = TransformationState.LIGHT_OF_TRANSFORMATION
+                            }
+                        }
+                     },
+                contentAlignment = Alignment.TopCenter
             ) {
                 when(transformationProgress) {
                     TransformationState.FUSION_PAIR -> {
@@ -144,17 +140,22 @@ class TransformationScreenFactory(
                             }
                         } else {
                             FusionPair(context, character, fusionTransformation, transformationBitmaps) {
-                                transformationProgress = TransformationState.NEW_CHARACTER
-                            }
+                                if (evolutionConfirmed) {
+                                    transformationProgress = TransformationState.NEW_CHARACTER
+                                }
+                             }
                         }
                     }
                     TransformationState.POWER_INCREASING -> PowerIncreasing(character, transformationBitmaps) {
-                        transformationProgress = TransformationState.NEW_CHARACTER
+                        if (evolutionConfirmed) {
+                            transformationProgress = TransformationState.NEW_CHARACTER
+                        }
                     }
                     TransformationState.NEW_CHARACTER -> NewCharacter(
                         firmwareSprites = transformationBitmaps
                     ) {
-                        executeTransformation(confirmEvolution)
+                        // Official-style checkpoint: actual character transformation occurs in NEW_CHARACTER.
+                        executeTransformation()
                     }
                     TransformationState.SPLASH -> Splash(partner = character) {
                         transformationProgress = TransformationState.LIGHT_OF_TRANSFORMATION

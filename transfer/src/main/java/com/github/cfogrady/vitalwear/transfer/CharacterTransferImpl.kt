@@ -52,7 +52,6 @@ internal class CharacterTransferImpl(context: Context): CharacterTransfer {
             CoroutineScope(Dispatchers.IO).launch {
                 when(packetsReceived) {
                     0 -> {
-                        try {
                         val character = Character.parseFrom(payload.asBytes())
                         if(receive(character)) {
                             Log.i(TAG, "Send Received Signal")
@@ -62,11 +61,6 @@ internal class CharacterTransferImpl(context: Context): CharacterTransfer {
                             Log.i(TAG, "Send Rejected Signal")
                             nearbyP2PConnection.sendData(REJECTED_SIGNAL)
                             result.update { Result.REJECTED }
-                        }
-                        } catch (e: InvalidProtocolBufferException) {
-                            Log.i(TAG, "Expected Character payload was invalid", e)
-                            nearbyP2PConnection.sendData(REJECTED_SIGNAL)
-                            result.update { Result.FAILURE }
                         }
                     }
                 }
@@ -83,7 +77,7 @@ internal class CharacterTransferImpl(context: Context): CharacterTransfer {
                     Log.i(TAG, "Send Ready Signal")
                     val connectMeta = ConnectMeta.newBuilder()
                         .setReadyIndicator(READY_SIGNAL)
-                        .addAllSupportedVersions(SUPPORTED_VERSIONS.toList())
+                        .addAllSupportedVersions(listOf(1))
                         .build()
                     nearbyP2PConnection.sendData(connectMeta.toByteArray())
                 }
@@ -100,9 +94,9 @@ internal class CharacterTransferImpl(context: Context): CharacterTransfer {
         return result
     }
 
-    fun findMaxSharedVersion(otherVersions: Set<Int>): Int? {
+    fun findMaxSharedVersion(otherVersions: Set<Int>): Int {
         val matchingVersions = SUPPORTED_VERSIONS.intersect(otherVersions)
-        return matchingVersions.maxOrNull()
+        return matchingVersions.last()
     }
 
     override fun sendCharacterToDevice(senderName: String, character: Character): StateFlow<Result> {
@@ -114,15 +108,11 @@ internal class CharacterTransferImpl(context: Context): CharacterTransfer {
                     0 -> {
                         try {
                             val connectionMeta = ConnectMeta.parseFrom(payload.asBytes())
-                            val useVersion = findMaxSharedVersion(connectionMeta.supportedVersionsList.toSet())
-                            if(READY_SIGNAL == connectionMeta.readyIndicator && useVersion != null) {
+                            if(READY_SIGNAL == connectionMeta.readyIndicator) {
                                 packetsReceived++
-                                Log.i(TAG, "Received Ready Signal. Sending Character with version $useVersion")
+                                // val useVersion = findMaxSharedVersion(connectionMeta.supportedVersionsList.toSet())
+                                Log.i(TAG, "Received Ready Signal. Sending Character")
                                 nearbyP2PConnection.sendData(character.toByteArray())
-                            } else {
-                                Log.i(TAG, "No compatible transfer version found")
-                                result.update { Result.REJECTED }
-                                close()
                             }
                         } catch (e: InvalidProtocolBufferException) {
                             Log.i(TAG, "Expected ConnectMeta was invalid")
@@ -134,10 +124,6 @@ internal class CharacterTransferImpl(context: Context): CharacterTransfer {
                         if (payload.asBytes().contentEquals(RECEIVED_SIGNAL)) {
                             Log.i(TAG, "Received Success Signal.")
                             result.update { Result.SUCCESS }
-                            close()
-                        } else if (payload.asBytes().contentEquals(REJECTED_SIGNAL)) {
-                            Log.i(TAG, "Received Rejected Signal.")
-                            result.update { Result.REJECTED }
                             close()
                         } else {
                             Log.i(TAG, "Received Unexpected Signal.")

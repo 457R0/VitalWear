@@ -42,11 +42,13 @@ import com.github.cfogrady.vitalwear.settings.CharacterSettingsEntity
     CharacterAdventureEntity::class,
     TransformationHistoryEntity::class,
     CardSettingsEntity::class],
-    version = 5,
+    version = 7,
     autoMigrations = [
         AutoMigration(from = 2, to = 3, spec = DropClearedFromAdventure::class),
         AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5),
+        AutoMigration(from = 5, to = 6),
+        AutoMigration(from = 6, to = 7),
     ])
 @TypeConverters(LocalDateTimeConverters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -66,6 +68,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun transformationHistoryDao(): TransformationHistoryDao
 
     abstract fun cardSettingsDao(): CardSettingsDao
+
 
     abstract fun statConversionDao(): StatConversionDao
 }
