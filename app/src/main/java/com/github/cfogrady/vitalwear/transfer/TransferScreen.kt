@@ -79,6 +79,8 @@ interface TransferScreenController: SendAnimationController, ReceiveAnimationCon
 @Composable
 fun TransferScreen(controller: TransferScreenController) {
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val transferHaptics = remember(context) { TransferHaptics(context.applicationContext) }
     val hceStatus by VitalWearHceSessionManager.transferStatus.collectAsState()
     var state by remember { mutableStateOf(TransferState.ENTRY) }
     var sendOrReceive by remember { mutableStateOf(SendOrReceive.SEND) }
@@ -105,11 +107,17 @@ fun TransferScreen(controller: TransferScreenController) {
         TransferState.WAITING -> {
             LaunchedEffect(hceStatus) {
                 when (hceStatus) {
+                    VitalWearHceSessionManager.TransferStatus.ARMED_SEND,
+                    VitalWearHceSessionManager.TransferStatus.ARMED_RECEIVE -> {
+                        transferHaptics.onTransferArmed()
+                    }
                     VitalWearHceSessionManager.TransferStatus.SUCCESS -> {
+                        transferHaptics.onSafeToRemove()
                         resultStatus = HceTransferResult.SUCCESS
                         state = TransferState.TRANSFERRED
                     }
                     VitalWearHceSessionManager.TransferStatus.FAILURE -> {
+                        transferHaptics.onTransferFailed()
                         resultStatus = HceTransferResult.FAILURE
                         state = TransferState.TRANSFERRED
                     }

@@ -23,6 +23,7 @@ class FirmwareReceiver(private val firmwareManager: FirmwareManager, private val
         withContext(Dispatchers.IO) {
             val channelClient = Wearable.getChannelClient(context)
             try {
+                Timber.i("importFirmwareFromChannel: starting for channel ${channel.path}")
                 _firmwareImportProgress.value = 0
                 notificationChannelManager.sendProgressNotification(
                     context,
@@ -30,15 +31,17 @@ class FirmwareReceiver(private val firmwareManager: FirmwareManager, private val
                     0,
                     NotificationChannelManager.FIRMWARE_IMPORT_PROGRESS_ID,
                 )
+                Timber.i("Getting input stream from channel")
                 channelClient.getInputStream(channel).await().use { rawInput ->
                     val channelInput = DataInputStream(BufferedInputStream(rawInput))
                     val payloadSize = channelInput.readInt()
+                    Timber.i("Payload size from phone: $payloadSize bytes")
                     if (payloadSize <= 0) {
                         throw IllegalStateException("Firmware payload was empty")
                     }
                     context.contentResolver.openOutputStream(firmwareManager.firmwareUri(context), "w").use { firmwareOutput ->
                         if (firmwareOutput == null) {
-                            throw IllegalStateException("Unable to open firmware output stream")
+                            throw IllegalStateException("Unable to open firmware output stream at ${firmwareManager.firmwareUri(context)}")
                         }
                         val transferBuffer = ByteArray(4096)
                         var totalRead = 0
@@ -46,7 +49,7 @@ class FirmwareReceiver(private val firmwareManager: FirmwareManager, private val
                             val bytesToRead = minOf(transferBuffer.size, payloadSize - totalRead)
                             val bytesRead = channelInput.read(transferBuffer, 0, bytesToRead)
                             if (bytesRead < 0) {
-                                throw IllegalStateException("Firmware transfer ended early")
+                                throw IllegalStateException("Firmware transfer ended early at $totalRead/$payloadSize bytes")
                             }
                             firmwareOutput.write(transferBuffer, 0, bytesRead)
                             totalRead += bytesRead
@@ -60,6 +63,7 @@ class FirmwareReceiver(private val firmwareManager: FirmwareManager, private val
                                 NotificationChannelManager.FIRMWARE_IMPORT_PROGRESS_ID,
                             )
                         }
+                        Timber.i("Firmware file written successfully ($totalRead bytes)")
                     }
                 }
                 _firmwareImportProgress.value = 95
@@ -80,8 +84,16 @@ class FirmwareReceiver(private val firmwareManager: FirmwareManager, private val
                     NotificationChannelManager.FIRMWARE_IMPORT_PROGRESS_ID,
                 )
                 notificationChannelManager.sendGenericNotification(context, "New Firmware Loaded", "")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to import firmware from phone")
+                _firmwareImportProgress.value = 0
+                notificationChannelManager.sendGenericNotification(
+                    context,
+                    "Firmware Import Failed",
+                    e.message ?: "Unknown error"
+                )
             } finally {
-                channelClient.close(channel)
+                runCatching { channelClient.close(channel).await() }
             }
         }
     }

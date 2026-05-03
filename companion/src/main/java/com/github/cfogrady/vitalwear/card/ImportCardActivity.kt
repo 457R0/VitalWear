@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
@@ -47,7 +46,6 @@ import com.github.cfogrady.vb.dim.header.DimHeader
 import com.github.cfogrady.vb.dim.transformation.TransformationRequirements
 import com.github.cfogrady.vb.dim.transformation.TransformationRequirements.TransformationRequirementsEntry
 import com.github.cfogrady.vitalwear.Loading
-import com.github.cfogrady.vitalwear.common.card.CardLoader
 import com.github.cfogrady.vitalwear.common.communication.ChannelTypes
 import com.github.cfogrady.vitalwear.common.util.ActivityHelper
 import com.github.cfogrady.vitalwear.VitalWearCompanion
@@ -83,10 +81,8 @@ class ImportCardActivity() : ComponentActivity() {
     private lateinit var filePickLauncher: ActivityResultLauncher<Array<String>>
     private lateinit var cardVerificationLauncher: ((Intent)->Unit)->Unit
     private lateinit var validatedCardManager: ValidatedCardManager
-    private lateinit var cardLoader: CardLoader
 
     private val importState = MutableStateFlow(ImportState.PickFile)
-    private var cardsLoaded = setOf<String>()
     private lateinit var uri: Uri
     private var cardName = MutableStateFlow("")
     private var uniqueSprites = MutableStateFlow(false)
@@ -97,16 +93,9 @@ class ImportCardActivity() : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         validatedCardManager = (applicationContext as VitalWearCompanion).validatedCardManager
-        cardLoader = (applicationContext as VitalWearCompanion).cardLoader
-        val cardMetaEntityDao = (applicationContext as VitalWearCompanion).cardMetaEntityDao
         filePickLauncher = buildFilePickLauncher()
         cardVerificationLauncher = buildCardVerificationLauncher()
         setContent {
-            LaunchedEffect(true) {
-                withContext(Dispatchers.IO) {
-                    cardsLoaded = cardMetaEntityDao.getAll().map{it.cardName}.toSet()
-                }
-            }
             KeepScreenOn()
             val state by importState.collectAsState()
             when(state) {
@@ -176,11 +165,7 @@ class ImportCardActivity() : ComponentActivity() {
                     Checkbox(checked = unique, onCheckedChange = {uniqueSprites.value = it})
                 }
                 Button(onClick = {
-                    if(cardsLoaded.contains(name)) {
-                        Toast.makeText(applicationContext, "Card named \"$name\" has already been imported", Toast.LENGTH_SHORT).show()
-                    } else {
-                        importState.value = ImportState.LoadFile
-                    }
+                    importState.value = ImportState.LoadFile
                 }) {
                     Text(text = "Import")
                 }
@@ -280,5 +265,10 @@ class ImportCardActivity() : ComponentActivity() {
         }
         importStatus.value = "Transfer complete"
         importPercent.value = 100
+
+        // Sync the card data to VBHelper so both apps share one database.
+        // This is non-blocking and failure-tolerant — a missing VBHelper install is fine.
+        importStatus.value = "Syncing to VBHelper"
+        VBHelperCardSync.syncCard(applicationContext, cardPayload, cardName.value)
     }
 }

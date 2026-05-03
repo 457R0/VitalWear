@@ -2,6 +2,7 @@ package com.github.cfogrady.vitalwear.firmware
 
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
@@ -79,43 +80,74 @@ class FirmwareImportActivity : ComponentActivity() {
         val channelClient = Wearable.getChannelClient(this)
         val nodeListTask = Wearable.getNodeClient(this).connectedNodes
         lifecycleScope.launch(Dispatchers.IO) {
-            val nodes = nodeListTask.await()
-            lateinit var firmware: ByteArray
-            contentResolver.openInputStream(uri).use {
-                firmware = it!!.readBytes()
-            }
-            transferPercent.value = 5
-            transferStatus.value = "Sending firmware"
-            val totalBytes = (firmware.size + 4).toLong() * nodes.size
-            var transferredBytes = 0L
-            for (node in nodes) {
-                val channel = channelClient.openChannel(node.id, ChannelTypes.FIRMWARE_DATA).await()
-                // We don't use send file because we can't make use of the uri received from the file picker with sendFile. We need a full file path, to which we don't have access.
-                channelClient.getOutputStream(channel).await().use {
-                    val output = DataOutputStream(it)
-                    Timber.i("Writing to firmware to watch")
-                    output.writeInt(firmware.size)
-                    transferredBytes += 4
-                    transferPercent.value = if (totalBytes == 0L) 0 else ((transferredBytes * 100) / totalBytes).toInt().coerceIn(0, 100)
-                    val buffer = ByteArray(4096)
-                    var bytesRead: Int
-                    firmware.inputStream().use { firmwareInput ->
-                        while (firmwareInput.read(buffer).also { bytesRead = it } >= 0) {
-                            output.write(buffer, 0, bytesRead)
-                            transferredBytes += bytesRead
-                            transferPercent.value = if (totalBytes == 0L) 0 else ((transferredBytes * 100) / totalBytes).toInt().coerceIn(0, 100)
-                        }
+            try {
+                Timber.i("Starting firmware import, reading file from $uri")
+                val nodes = nodeListTask.await()
+                Timber.i("Found ${nodes.size} connected nodes")
+                if (nodes.isEmpty()) {
+                    transferStatus.value = "No watch connected"
+                    Timber.w("No connected watch found")
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@FirmwareImportActivity, "No connected watch found", Toast.LENGTH_LONG).show()
                     }
-                    output.flush()
-                    Timber.i("Done writing to firmware to watch")
+                    return@launch
                 }
-                Timber.i("Closing channel to watch")
-                channelClient.close(channel).await()
-            }
-            transferStatus.value = "Transfer complete"
-            transferPercent.value = 100
-            withContext(Dispatchers.Main) {
-                finish()
+
+                val firmware = contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes()
+                } ?: throw IllegalStateException("Unable to read selected firmware file")
+                Timber.i("Read firmware file, size=${firmware.size} bytes")
+
+                transferPercent.value = 5
+                transferStatus.value = "Sending firmware"
+                val totalBytes = (firmware.size + 4).toLong() * nodes.size
+                var transferredBytes = 0L
+                for (node in nodes) {
+                    Timber.i("Opening channel to node ${node.id} (${node.displayName})")
+                    try {
+                        val channel = channelClient.openChannel(node.id, ChannelTypes.FIRMWARE_DATA).await()
+                        Timber.i("Channel opened successfully")
+                        try {
+                            // We don't use sendFile because OpenDocument returns a content URI.
+                            channelClient.getOutputStream(channel).await().use {
+                                val output = DataOutputStream(it)
+                                Timber.i("Writing firmware to watch ${node.displayName} (${node.id})")
+                                output.writeInt(firmware.size)
+                                transferredBytes += 4
+                                transferPercent.value = if (totalBytes == 0L) 0 else ((transferredBytes * 100) / totalBytes).toInt().coerceIn(0, 100)
+                                val buffer = ByteArray(4096)
+                                var bytesRead: Int
+                                firmware.inputStream().use { firmwareInput ->
+                                    while (firmwareInput.read(buffer).also { bytesRead = it } >= 0) {
+                                        output.write(buffer, 0, bytesRead)
+                                        transferredBytes += bytesRead
+                                        transferPercent.value = if (totalBytes == 0L) 0 else ((transferredBytes * 100) / totalBytes).toInt().coerceIn(0, 100)
+                                    }
+                                }
+                                output.flush()
+                                Timber.i("Firmware written successfully to ${node.displayName}")
+                            }
+                        } finally {
+                            runCatching { channelClient.close(channel).await() }
+                        }
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to send firmware to node ${node.id}")
+                        throw e
+                    }
+                }
+                transferStatus.value = "Transfer complete"
+                transferPercent.value = 100
+                Timber.i("Firmware transfer complete")
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@FirmwareImportActivity, "Firmware sent successfully", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to send firmware to watch")
+                transferStatus.value = "Transfer failed: ${e.message ?: "unknown"}"
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@FirmwareImportActivity, "Firmware transfer failed: ${e.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }

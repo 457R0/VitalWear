@@ -1,46 +1,41 @@
 package com.github.cfogrady.vitalwear.data
 
-import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
-import androidx.room.TypeConverters
-import com.github.cfogrady.vitalwear.common.card.db.AdventureEntity
-import com.github.cfogrady.vitalwear.common.card.db.AdventureEntityDao
-import com.github.cfogrady.vitalwear.common.card.db.AttributeFusionEntity
-import com.github.cfogrady.vitalwear.common.card.db.AttributeFusionEntityDao
-import com.github.cfogrady.vitalwear.common.card.db.CardMetaEntity
-import com.github.cfogrady.vitalwear.common.card.db.CardMetaEntityDao
-import com.github.cfogrady.vitalwear.common.card.db.SpeciesEntity
-import com.github.cfogrady.vitalwear.common.card.db.SpeciesEntityDao
-import com.github.cfogrady.vitalwear.common.card.db.SpecificFusionEntity
-import com.github.cfogrady.vitalwear.common.card.db.SpecificFusionEntityDao
-import com.github.cfogrady.vitalwear.common.card.db.TransformationEntity
-import com.github.cfogrady.vitalwear.common.card.db.TransformationEntityDao
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.github.cfogrady.vitalwear.card.ValidatedCardEntity
 import com.github.cfogrady.vitalwear.card.ValidatedCardEntityDao
-import com.github.cfogrady.vitalwear.common.data.LocalDateTimeConverters
-import com.github.cfogrady.vitalwear.common.data.migrations.DropClearedFromAdventure
 
-@Database(entities = [
-    SpeciesEntity::class,
-    CardMetaEntity::class,
-    TransformationEntity::class,
-    AdventureEntity::class,
-    AttributeFusionEntity::class,
-    SpecificFusionEntity::class,
-    ValidatedCardEntity::class],
-    version = 3,
-    autoMigrations = [
-        AutoMigration(from = 2, to = 3, spec = DropClearedFromAdventure::class)
-    ])
-@TypeConverters(LocalDateTimeConverters::class)
+/**
+ * Slimmed-down companion database — holds only validated-card unlock state.
+ *
+ * Card catalog data (species, transformations, adventures, etc.) has moved exclusively to
+ * VBHelper's `internalDb`.  When the companion imports a DIM file it syncs the raw bytes
+ * to VBHelper via [com.github.cfogrady.vitalwear.card.VBHelperCardSync], which parses and
+ * stores those tables there.
+ *
+ * Migration 3 → 4: drop the now-redundant card-catalog tables that were never actually
+ * populated in production builds.
+ */
+@Database(
+    entities = [ValidatedCardEntity::class],
+    version = 4
+)
 abstract class AppDatabase : RoomDatabase() {
-    abstract fun speciesEntityDao(): SpeciesEntityDao
-    abstract fun cardMetaEntityDao(): CardMetaEntityDao
-    abstract fun transformationEntityDao(): TransformationEntityDao
-
-    abstract fun adventureEntityDao(): AdventureEntityDao
-    abstract fun attributeFusionEntityDao(): AttributeFusionEntityDao
-    abstract fun specificFusionEntityDao(): SpecificFusionEntityDao
     abstract fun validatedCardEntityDao(): ValidatedCardEntityDao
+
+    companion object {
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Card catalog tables have been moved to VBHelper's single database.
+                db.execSQL("DROP TABLE IF EXISTS SpeciesEntity")
+                db.execSQL("DROP TABLE IF EXISTS CardMetaEntity")
+                db.execSQL("DROP TABLE IF EXISTS TransformationEntity")
+                db.execSQL("DROP TABLE IF EXISTS AdventureEntity")
+                db.execSQL("DROP TABLE IF EXISTS AttributeFusionEntity")
+                db.execSQL("DROP TABLE IF EXISTS SpecificFusionEntity")
+            }
+        }
+    }
 }

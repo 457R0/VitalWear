@@ -312,7 +312,30 @@ class CharacterManagerImpl(
             0,
             50,
             false,
-            false
+            false,
+            // Cross-device stats - initialized to defaults for new characters
+            0,  // ageInDays
+            0,  // activityLevel
+            0,  // heartRateCurrent
+            0,  // generation
+            0,  // totalTrophies
+            0,  // nextAdventureMissionStage
+            0,  // abilityType
+            0,  // abilityBranch
+            0,  // abilityRarity
+            0,  // abilityReset
+            0,  // rank
+            0,  // itemEffectMentalStateValue
+            0,  // itemEffectMentalStateMinutesRemaining
+            0,  // itemEffectActivityLevelValue
+            0,  // itemEffectActivityLevelMinutesRemaining
+            0,  // itemEffectVitalPointsChangeValue
+            0,  // itemEffectVitalPointsChangeMinutesRemaining
+            0,  // itemType
+            0,  // itemMultiplier
+            0,  // itemRemainingTime
+            0,  // firmwareMinorVersion
+            0   // firmwareMajorVersion
         )
     }
 

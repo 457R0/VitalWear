@@ -11,12 +11,41 @@ import com.github.cfogrady.vitalwear.transfer.toCharacterSettings
 import com.github.cfogrady.vitalwear.transfer.toTransformationHistoryEntities
 import com.github.cfogrady.vitalwear.transfer.validateForImport
 import com.github.cfogrady.vitalwear.transfer.remapImportedRootCardName
+import com.github.cfogrady.vitalwear.transfer.toProto
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 class VitalWearHceTransferRepository(
     private val app: VitalWearApp,
 ) {
     fun deleteCurrentCharacterAfterSuccessfulSend() {
         app.characterManager.deleteCurrentCharacter()
+    }
+
+    /**
+     * Builds and returns the serialised protobuf payload for the currently active character,
+     * or null if there is no active character.
+     *
+     * Called synchronously from [VitalWearHostApduService.processCommandApdu] (runs on the
+     * HCE thread) via [runBlocking].  All DB work is pinned to [Dispatchers.IO] so the main
+     * thread is never blocked through coroutine machinery itself — and the NFC 10-second
+     * transaction timeout is more than sufficient for these fast queries.
+     */
+    fun getActiveCharacterPayload(): ByteArray? = runBlocking {
+        withContext(Dispatchers.IO) {
+            val character = app.characterManager.getCurrentCharacter()
+                ?: return@withContext null
+            val transformationHistory = app.characterManager.getTransformationHistory(character.characterStats.id)
+            val maxAdventureByCard = app.adventureService
+                .getMaxAdventureIdxByCardCompletedForCharacter(character.characterStats.id)
+            character.toProto(
+                transformationHistory = transformationHistory,
+                maxAdventureCompletedByCard = maxAdventureByCard,
+                currentExerciseLevel = app.heartRateService.currentExerciseLevel.value,
+                heartRateCurrent = app.heartRateService.lastHeartRate.value,
+            ).toByteArray()
+        }
     }
 
     suspend fun importCharacter(payload: ByteArray): Boolean {

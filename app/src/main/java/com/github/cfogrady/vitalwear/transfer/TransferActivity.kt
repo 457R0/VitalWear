@@ -16,6 +16,7 @@ import com.github.cfogrady.vitalwear.character.data.CharacterEntity
 import com.github.cfogrady.vitalwear.character.data.CharacterState
 import com.github.cfogrady.vitalwear.character.transformation.history.TransformationHistoryEntity
 import com.github.cfogrady.vitalwear.common.card.CharacterSpritesIO
+import com.github.cfogrady.vitalwear.common.card.CardType
 import com.github.cfogrady.vitalwear.common.card.db.CardMetaEntity
 import com.github.cfogrady.vitalwear.common.card.db.CardMetaEntityDao
 import com.github.cfogrady.vitalwear.common.card.db.SpeciesEntityDao
@@ -79,7 +80,13 @@ class TransferActivity: ComponentActivity(), TransferScreenController {
         activeCharacter?.let {
             val maxAdventureIdxCompletedByCard = adventureService.getMaxAdventureIdxByCardCompletedForCharacter(it.characterStats.id)
             val transformationHistory = characterManager.getTransformationHistory(it.characterStats.id)
-            return activeCharacter.toProto(transformationHistory, maxAdventureIdxCompletedByCard)
+            val app = application as VitalWearApp
+            return activeCharacter.toProto(
+                transformationHistory = transformationHistory,
+                maxAdventureCompletedByCard = maxAdventureIdxCompletedByCard,
+                currentExerciseLevel = app.heartRateService.currentExerciseLevel.value,
+                heartRateCurrent = app.heartRateService.lastHeartRate.value,
+            )
         }
         return null
     }
@@ -132,11 +139,28 @@ class TransferActivity: ComponentActivity(), TransferScreenController {
     }
 }
 
-fun VBCharacter.toProto(transformationHistory: List<TransformationHistoryEntity>, maxAdventureCompletedByCard: Map<String, Int>): Character {
+fun VBCharacter.toProto(
+    transformationHistory: List<TransformationHistoryEntity>,
+    maxAdventureCompletedByCard: Map<String, Int>,
+    currentExerciseLevel: Int = 0,
+    heartRateCurrent: Int = 0,
+): Character {
+    val generation = (transformationHistory.size - 1).coerceAtLeast(0)
+    val totalTrophies = this.characterStats.trainedPP.coerceAtLeast(0)
+    val nextAdventureMissionStage = (maxAdventureCompletedByCard[this.cardName()]?.plus(1) ?: 0).coerceAtLeast(0)
+
     return Character.newBuilder()
         .setCardId(this.cardMeta.cardId)
         .setCardName(this.cardName())
-        .setCharacterStats(this.characterStats.toProto())
+        .setCharacterStats(
+            this.characterStats.toProto(
+                deviceType = this.toTransferDeviceType(),
+                currentHeartRateCurrent = heartRateCurrent,
+                generationOverride = generation,
+                totalTrophiesOverride = totalTrophies,
+                nextAdventureMissionStageOverride = nextAdventureMissionStage,
+            )
+        )
         .setSettings(this.settings.toProto())
         .addAllTransformationHistory(transformationHistory.toProtoList())
         .putAllMaxAdventureCompletedByCard(maxAdventureCompletedByCard)
@@ -176,9 +200,18 @@ fun Character.TransformationEvent.toTransformationHistoryEntitiy(): Transformati
     )
 }
 
-fun CharacterEntity.toProto(): Character.CharacterStats {
+fun CharacterEntity.toProto(
+    deviceType: Character.CharacterStats.TransferDeviceType = Character.CharacterStats.TransferDeviceType.TRANSFER_DEVICE_TYPE_UNSPECIFIED,
+    currentHeartRateCurrent: Int = 0,
+    generationOverride: Int? = null,
+    totalTrophiesOverride: Int? = null,
+    nextAdventureMissionStageOverride: Int? = null,
+): Character.CharacterStats {
     val totalBattles = this.totalBattles.coerceAtLeast(0)
     val currentPhaseBattles = this.currentPhaseBattles.coerceAtLeast(0)
+    // Use currentHeartRateCurrent for real-time HR, fallback to stored value
+    val heartRateToUse = if (currentHeartRateCurrent > 0) currentHeartRateCurrent else this.heartRateCurrent
+
     return Character.CharacterStats.newBuilder()
         .setMood(this.mood.coerceAtLeast(0))
         .setVitals(this.vitals.coerceAtLeast(0))
@@ -195,7 +228,38 @@ fun CharacterEntity.toProto(): Character.CharacterStats {
         .setTrainedBp(this.trainedBp.coerceAtLeast(0))
         .setTrainedHp(this.trainedHp.coerceAtLeast(0))
         .setTrainedPp(this.trainedPP.coerceAtLeast(0))
+        .setDeviceType(deviceType)
+        .setAgeInDays((generationOverride ?: this.ageInDays).coerceAtLeast(0))
+        .setActivityLevel(this.activityLevel.coerceAtLeast(0))
+        .setHeartRateCurrent(heartRateToUse.coerceAtLeast(0))
+        .setGeneration((generationOverride ?: this.generation).coerceAtLeast(0))
+        .setTotalTrophies((totalTrophiesOverride ?: this.totalTrophies).coerceAtLeast(0))
+        .setNextAdventureMissionStage((nextAdventureMissionStageOverride ?: this.nextAdventureMissionStage).coerceAtLeast(0))
+        .setItemEffectMentalStateValue(this.itemEffectMentalStateValue.coerceAtLeast(0))
+        .setItemEffectMentalStateMinutesRemaining(this.itemEffectMentalStateMinutesRemaining.coerceAtLeast(0))
+        .setItemEffectActivityLevelValue(this.itemEffectActivityLevelValue.coerceAtLeast(0))
+        .setItemEffectActivityLevelMinutesRemaining(this.itemEffectActivityLevelMinutesRemaining.coerceAtLeast(0))
+        .setItemEffectVitalPointsChangeValue(this.itemEffectVitalPointsChangeValue.coerceAtLeast(0))
+        .setItemEffectVitalPointsChangeMinutesRemaining(this.itemEffectVitalPointsChangeMinutesRemaining.coerceAtLeast(0))
+        .setAbilityRarity(this.abilityRarity.coerceAtLeast(0))
+        .setAbilityType(this.abilityType.coerceAtLeast(0))
+        .setAbilityBranch(this.abilityBranch.coerceAtLeast(0))
+        .setAbilityReset(this.abilityReset.coerceAtLeast(0))
+        .setRank(this.rank.coerceAtLeast(0))
+        .setItemType(this.itemType.coerceAtLeast(0))
+        .setItemMultiplier(this.itemMultiplier.coerceAtLeast(0))
+        .setItemRemainingTime(this.itemRemainingTime.coerceAtLeast(0))
+        .setFirmwareMinorVersion(this.firmwareMinorVersion.coerceAtLeast(0))
+        .setFirmwareMajorVersion(this.firmwareMajorVersion.coerceAtLeast(0))
         .build()
+}
+
+private fun VBCharacter.toTransferDeviceType(): Character.CharacterStats.TransferDeviceType {
+    return if (cardMeta.cardType == CardType.BEM || settings.assumedFranchise != null || characterStats.trainedHp > 0 || characterStats.trainedAp > 0 || characterStats.trainedBp > 0) {
+        Character.CharacterStats.TransferDeviceType.TRANSFER_DEVICE_TYPE_BE
+    } else {
+        Character.CharacterStats.TransferDeviceType.TRANSFER_DEVICE_TYPE_VB
+    }
 }
 
 fun CharacterSettings.toProto(): Character.Settings {
@@ -235,6 +299,29 @@ fun Character.CharacterStats.toCharacterEntity(cardName: String): CharacterEntit
         mood = this.mood.coerceAtLeast(0),
         sleeping = false,
         dead = false,
+        // Cross-device stats preservation
+        ageInDays = this.ageInDays.coerceAtLeast(0),
+        activityLevel = this.activityLevel.coerceAtLeast(0),
+        heartRateCurrent = this.heartRateCurrent.coerceAtLeast(0),
+        generation = this.generation.coerceAtLeast(0),
+        totalTrophies = this.totalTrophies.coerceAtLeast(0),
+        nextAdventureMissionStage = this.nextAdventureMissionStage.coerceAtLeast(0),
+        abilityType = this.abilityType.coerceAtLeast(0),
+        abilityBranch = this.abilityBranch.coerceAtLeast(0),
+        abilityRarity = this.abilityRarity.coerceAtLeast(0),
+        abilityReset = this.abilityReset.coerceAtLeast(0),
+        rank = this.rank.coerceAtLeast(0),
+        itemEffectMentalStateValue = this.itemEffectMentalStateValue.coerceAtLeast(0),
+        itemEffectMentalStateMinutesRemaining = this.itemEffectMentalStateMinutesRemaining.coerceAtLeast(0),
+        itemEffectActivityLevelValue = this.itemEffectActivityLevelValue.coerceAtLeast(0),
+        itemEffectActivityLevelMinutesRemaining = this.itemEffectActivityLevelMinutesRemaining.coerceAtLeast(0),
+        itemEffectVitalPointsChangeValue = this.itemEffectVitalPointsChangeValue.coerceAtLeast(0),
+        itemEffectVitalPointsChangeMinutesRemaining = this.itemEffectVitalPointsChangeMinutesRemaining.coerceAtLeast(0),
+        itemType = this.itemType.coerceAtLeast(0),
+        itemMultiplier = this.itemMultiplier.coerceAtLeast(0),
+        itemRemainingTime = this.itemRemainingTime.coerceAtLeast(0),
+        firmwareMinorVersion = this.firmwareMinorVersion.coerceAtLeast(0),
+        firmwareMajorVersion = this.firmwareMajorVersion.coerceAtLeast(0),
     )
 }
 
@@ -459,6 +546,29 @@ fun Character.sanitizeForImport(): Character {
                 .setTotalWins(this.characterStats.totalWins.coerceIn(0, totalBattles))
                 .setCurrentPhaseWins(this.characterStats.currentPhaseWins.coerceIn(0, currentPhaseBattles))
                 .setMood(this.characterStats.mood.coerceAtLeast(0))
+                .setDeviceType(this.characterStats.deviceType)
+                .setAgeInDays(this.characterStats.ageInDays.coerceAtLeast(0))
+                .setActivityLevel(this.characterStats.activityLevel.coerceAtLeast(0))
+                .setHeartRateCurrent(this.characterStats.heartRateCurrent.coerceAtLeast(0))
+                .setGeneration(this.characterStats.generation.coerceAtLeast(0))
+                .setTotalTrophies(this.characterStats.totalTrophies.coerceAtLeast(0))
+                .setNextAdventureMissionStage(this.characterStats.nextAdventureMissionStage.coerceAtLeast(0))
+                .setItemEffectMentalStateValue(this.characterStats.itemEffectMentalStateValue.coerceAtLeast(0))
+                .setItemEffectMentalStateMinutesRemaining(this.characterStats.itemEffectMentalStateMinutesRemaining.coerceAtLeast(0))
+                .setItemEffectActivityLevelValue(this.characterStats.itemEffectActivityLevelValue.coerceAtLeast(0))
+                .setItemEffectActivityLevelMinutesRemaining(this.characterStats.itemEffectActivityLevelMinutesRemaining.coerceAtLeast(0))
+                .setItemEffectVitalPointsChangeValue(this.characterStats.itemEffectVitalPointsChangeValue.coerceAtLeast(0))
+                .setItemEffectVitalPointsChangeMinutesRemaining(this.characterStats.itemEffectVitalPointsChangeMinutesRemaining.coerceAtLeast(0))
+                .setAbilityRarity(this.characterStats.abilityRarity.coerceAtLeast(0))
+                .setAbilityType(this.characterStats.abilityType.coerceAtLeast(0))
+                .setAbilityBranch(this.characterStats.abilityBranch.coerceAtLeast(0))
+                .setAbilityReset(this.characterStats.abilityReset.coerceAtLeast(0))
+                .setRank(this.characterStats.rank.coerceAtLeast(0))
+                .setItemType(this.characterStats.itemType.coerceAtLeast(0))
+                .setItemMultiplier(this.characterStats.itemMultiplier.coerceAtLeast(0))
+                .setItemRemainingTime(this.characterStats.itemRemainingTime.coerceAtLeast(0))
+                .setFirmwareMinorVersion(this.characterStats.firmwareMinorVersion.coerceAtLeast(0))
+                .setFirmwareMajorVersion(this.characterStats.firmwareMajorVersion.coerceAtLeast(0))
                 .build()
         )
         .setSettings(settingsBuilder.build())

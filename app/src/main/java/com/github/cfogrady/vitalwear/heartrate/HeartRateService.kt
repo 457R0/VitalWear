@@ -14,6 +14,8 @@ class HeartRateService(
 
     private val _currentExerciseLevel = MutableStateFlow(0)
     val currentExerciseLevel: StateFlow<Int> = _currentExerciseLevel
+    private val _lastHeartRate = MutableStateFlow(0)
+    val lastHeartRate: StateFlow<Int> = _lastHeartRate
 
     private suspend fun getHeartRate(): HeartRateResult {
         val listener = SingleHeartRateSensorListener(sensorManager, sensorThreadHandler)
@@ -41,6 +43,9 @@ class HeartRateService(
     suspend fun getExerciseLevel(lastLevel: Int): ExerciseLevel {
         val heartRateResult = getHeartRate()
         val level = exerciseLevelFromResult(heartRateResult, lastLevel)
+        if (heartRateResult.heartRateError == HeartRateResult.Companion.HeartRateError.NONE) {
+            _lastHeartRate.value = heartRateResult.heartRate
+        }
         _currentExerciseLevel.value = level
         return ExerciseLevel(level, heartRateResult)
     }

@@ -5,6 +5,8 @@
 
     <!-- NFC Access -->
     <uses-permission android:name="android.permission.NFC" />
+    <!-- Access VBHelper's shared card database (signature-level; automatically granted) -->
+    <uses-permission android:name="com.github.nacabaro.vbhelper.permission.ACCESS_CARD_DATA" />
 
     <application
         android:name="com.github.cfogrady.vitalwear.VitalWearCompanion"

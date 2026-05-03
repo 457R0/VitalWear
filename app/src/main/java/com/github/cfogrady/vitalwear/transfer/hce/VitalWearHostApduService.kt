@@ -65,6 +65,26 @@ class VitalWearHostApduService : HostApduService() {
             return VitalWearHceProtocol.buildResponse(statusWord = VitalWearHceProtocol.SW_FUNC_NOT_SUPPORTED)
         }
 
+        // Auto-arm so VBHelper can initiate a transfer without the user first navigating to
+        // TransferActivity on the watch.  The existing buttons in TransferActivity still work
+        // and take precedence when the session is already armed.
+        if (VitalWearHceSessionManager.currentMode() == VitalWearHceSessionManager.Mode.IDLE) {
+            when (mode) {
+                VitalWearHceProtocol.MODE_WATCH_TO_PHONE -> {
+                    // VBHelper wants to READ from the watch — arm a SEND session automatically.
+                    val payload = repository.getActiveCharacterPayload()
+                        ?: return VitalWearHceProtocol.buildResponse(
+                            statusWord = VitalWearHceProtocol.SW_CONDITIONS_NOT_SATISFIED
+                        )
+                    VitalWearHceSessionManager.armSend(payload)
+                }
+                VitalWearHceProtocol.MODE_PHONE_TO_WATCH -> {
+                    // VBHelper wants to WRITE to the watch — arm a RECEIVE session automatically.
+                    VitalWearHceSessionManager.armReceive()
+                }
+            }
+        }
+
         val session = VitalWearHceSessionManager.negotiate(mode)
             ?: return VitalWearHceProtocol.buildResponse(statusWord = VitalWearHceProtocol.SW_CONDITIONS_NOT_SATISFIED)
 
