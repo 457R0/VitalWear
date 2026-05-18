@@ -2,6 +2,7 @@ package com.github.cfogrady.vitalwear.transfer.hce
 
 import android.nfc.cardemulation.HostApduService
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import com.github.cfogrady.vitalwear.VitalWearApp
 import kotlinx.coroutines.CoroutineScope
@@ -16,6 +17,23 @@ class VitalWearHostApduService : HostApduService() {
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val metricsLock = Any()
+
+    private data class HostSessionMetrics(
+        val direction: String,
+        val requestedChunkBytes: Int,
+        val negotiatedChunkBytes: Int,
+        val payloadBytes: Int,
+        val startedAtMs: Long,
+        var apduTotal: Int = 0,
+        var readChunkApdus: Int = 0,
+        var writeChunkApdus: Int = 0,
+        var statusPollApdus: Int = 0,
+        var readBytes: Int = 0,
+        var writeBytes: Int = 0,
+    )
+
+    private var currentMetrics: HostSessionMetrics? = null
 
     private val repository: VitalWearHceTransferRepository by lazy {
         VitalWearHceTransferRepository(application as VitalWearApp)
@@ -61,6 +79,7 @@ class VitalWearHostApduService : HostApduService() {
 
     override fun onDeactivated(reason: Int) {
         // Keep the armed mode until the UI changes mode or the activity exits.
+        logAndClearMetrics("deactivated(reason=$reason)")
     }
 
     private fun handleNegotiate(data: ByteArray): ByteArray {
@@ -72,6 +91,12 @@ class VitalWearHostApduService : HostApduService() {
         val version = data[1]
         if (version != VitalWearHceProtocol.VERSION_1) {
             return VitalWearHceProtocol.buildResponse(statusWord = VitalWearHceProtocol.SW_FUNC_NOT_SUPPORTED)
+        }
+
+        val requestedChunkSize = if (data.size >= 4) {
+            ((data[2].toInt() and 0xFF) shl 8) or (data[3].toInt() and 0xFF)
+        } else {
+            VitalWearHceProtocol.PREFERRED_MAX_CHUNK_SIZE
         }
 
         // Auto-arm so VBHelper can initiate a transfer without the user first navigating to
@@ -94,14 +119,26 @@ class VitalWearHostApduService : HostApduService() {
             }
         }
 
-        val session = VitalWearHceSessionManager.negotiate(mode)
+        val session = VitalWearHceSessionManager.negotiate(mode, requestedChunkSize)
             ?: return VitalWearHceProtocol.buildResponse(statusWord = VitalWearHceProtocol.SW_CONDITIONS_NOT_SATISFIED)
+
+        startMetrics(
+            direction = when (mode) {
+                VitalWearHceProtocol.MODE_WATCH_TO_PHONE -> "WATCH_TO_PHONE"
+                VitalWearHceProtocol.MODE_PHONE_TO_WATCH -> "PHONE_TO_WATCH"
+                else -> "UNKNOWN"
+            },
+            requestedChunkBytes = requestedChunkSize,
+            negotiatedChunkBytes = session.maxChunkSize,
+            payloadBytes = session.payloadLength,
+        )
+        bumpApduCount()
 
         val responseData = byteArrayOf(
             VitalWearHceProtocol.VERSION_1,
             mode,
-            ((VitalWearHceProtocol.DEFAULT_MAX_CHUNK_SIZE ushr 8) and 0xFF).toByte(),
-            (VitalWearHceProtocol.DEFAULT_MAX_CHUNK_SIZE and 0xFF).toByte(),
+            ((session.maxChunkSize ushr 8) and 0xFF).toByte(),
+            (session.maxChunkSize and 0xFF).toByte(),
             ((session.payloadLength ushr 24) and 0xFF).toByte(),
             ((session.payloadLength ushr 16) and 0xFF).toByte(),
             ((session.payloadLength ushr 8) and 0xFF).toByte(),
@@ -123,8 +160,9 @@ class VitalWearHostApduService : HostApduService() {
             return VitalWearHceProtocol.buildResponse(statusWord = VitalWearHceProtocol.SW_WRONG_P1P2)
         }
 
-        val chunk = VitalWearHceSessionManager.readChunk(offset, VitalWearHceProtocol.DEFAULT_MAX_CHUNK_SIZE)
+        val chunk = VitalWearHceSessionManager.readChunk(offset, VitalWearHceProtocol.PREFERRED_MAX_CHUNK_SIZE)
             ?: return VitalWearHceProtocol.buildResponse(statusWord = VitalWearHceProtocol.SW_CONDITIONS_NOT_SATISFIED)
+        recordReadChunk(chunk.size)
         return VitalWearHceProtocol.buildResponse(chunk)
     }
 
@@ -139,6 +177,9 @@ class VitalWearHostApduService : HostApduService() {
                 (data[3].toInt() and 0xFF)
         val chunk = data.copyOfRange(4, data.size)
         val accepted = VitalWearHceSessionManager.writeChunk(offset, chunk)
+        if (accepted) {
+            recordWriteChunk(chunk.size)
+        }
         return if (accepted) {
             VitalWearHceProtocol.buildResponse()
         } else {
@@ -149,9 +190,17 @@ class VitalWearHostApduService : HostApduService() {
     private fun handleCommit(): ByteArray {
         return when (VitalWearHceSessionManager.currentMode()) {
             VitalWearHceSessionManager.Mode.SEND_TO_PHONE -> {
-                repository.deleteCurrentCharacterAfterSuccessfulSend()
                 VitalWearHceSessionManager.markSuccess()
                 VitalWearHceSessionManager.clear(resetStatus = false)
+                bumpApduCount()
+                logAndClearMetrics("success(send_commit)")
+                serviceScope.launch {
+                    runCatching {
+                        repository.deleteCurrentCharacterAfterSuccessfulSend()
+                    }.onFailure {
+                        Log.w(TAG, "Post-send delete failed after COMMIT", it)
+                    }
+                }
                 VitalWearHceProtocol.buildResponse()
             }
 
@@ -161,6 +210,7 @@ class VitalWearHostApduService : HostApduService() {
 
                 // Acknowledge COMMIT immediately so the phone-side IsoDep transceive does not time out.
                 VitalWearHceSessionManager.clear(resetStatus = false)
+                VitalWearHceSessionManager.markSyncing()
                 serviceScope.launch {
                     val importSuccess = runCatching {
                         repository.importCharacter(payload)
@@ -170,22 +220,28 @@ class VitalWearHostApduService : HostApduService() {
                     if (importSuccess) {
                         Log.i(TAG, "Async import marked SUCCESS")
                         VitalWearHceSessionManager.markSuccess()
+                        logAndClearMetrics("success(import_complete)")
                     } else {
                         Log.w(TAG, "Async import marked FAILURE")
                         VitalWearHceSessionManager.markFailure()
+                        logAndClearMetrics("failure(import_failed)")
                     }
                 }
+                bumpApduCount()
                 VitalWearHceProtocol.buildResponse()
             }
 
             VitalWearHceSessionManager.Mode.IDLE -> {
                 VitalWearHceSessionManager.markFailure()
+                bumpApduCount()
+                logAndClearMetrics("failure(commit_idle)")
                 VitalWearHceProtocol.buildResponse(statusWord = VitalWearHceProtocol.SW_CONDITIONS_NOT_SATISFIED)
             }
         }
     }
 
     private fun handleStatus(): ByteArray {
+        recordStatusPoll()
         val statusByte = when (VitalWearHceSessionManager.transferStatus.value) {
             VitalWearHceSessionManager.TransferStatus.IDLE -> 0x00.toByte()
             VitalWearHceSessionManager.TransferStatus.ARMED_SEND -> 0x01.toByte()
@@ -207,6 +263,73 @@ class VitalWearHostApduService : HostApduService() {
     private fun handleVibrate(data: ByteArray): ByteArray {
         // Trigger haptic feedback
         return VitalWearHceProtocol.buildResponse()
+    }
+
+    private fun startMetrics(
+        direction: String,
+        requestedChunkBytes: Int,
+        negotiatedChunkBytes: Int,
+        payloadBytes: Int,
+    ) {
+        synchronized(metricsLock) {
+            currentMetrics = HostSessionMetrics(
+                direction = direction,
+                requestedChunkBytes = requestedChunkBytes,
+                negotiatedChunkBytes = negotiatedChunkBytes,
+                payloadBytes = payloadBytes,
+                startedAtMs = SystemClock.elapsedRealtime(),
+            )
+        }
+    }
+
+    private fun bumpApduCount() {
+        synchronized(metricsLock) {
+            currentMetrics?.apduTotal = (currentMetrics?.apduTotal ?: 0) + 1
+        }
+    }
+
+    private fun recordReadChunk(bytes: Int) {
+        synchronized(metricsLock) {
+            currentMetrics?.let {
+                it.apduTotal += 1
+                it.readChunkApdus += 1
+                it.readBytes += bytes
+            }
+        }
+    }
+
+    private fun recordWriteChunk(bytes: Int) {
+        synchronized(metricsLock) {
+            currentMetrics?.let {
+                it.apduTotal += 1
+                it.writeChunkApdus += 1
+                it.writeBytes += bytes
+            }
+        }
+    }
+
+    private fun recordStatusPoll() {
+        synchronized(metricsLock) {
+            currentMetrics?.let {
+                it.apduTotal += 1
+                it.statusPollApdus += 1
+            }
+        }
+    }
+
+    private fun logAndClearMetrics(result: String) {
+        synchronized(metricsLock) {
+            val metrics = currentMetrics ?: return
+            val elapsed = SystemClock.elapsedRealtime() - metrics.startedAtMs
+            Log.i(
+                "HCE_HOST_METRICS",
+                "dir=${metrics.direction} requestedChunk=${metrics.requestedChunkBytes} negotiatedChunk=${metrics.negotiatedChunkBytes} " +
+                    "payload=${metrics.payloadBytes} apduTotal=${metrics.apduTotal} readApdus=${metrics.readChunkApdus} " +
+                    "writeApdus=${metrics.writeChunkApdus} statusApdus=${metrics.statusPollApdus} readBytes=${metrics.readBytes} " +
+                    "writeBytes=${metrics.writeBytes} elapsedMs=$elapsed result=$result"
+            )
+            currentMetrics = null
+        }
     }
 }
 

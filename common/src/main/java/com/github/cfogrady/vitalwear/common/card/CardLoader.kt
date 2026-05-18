@@ -71,7 +71,8 @@ class CardLoader(
         var franchise = 0
         if(card is BemCard) {
             cardType = CardType.BEM
-            franchise = card.header.franchiseId
+            // Local VB-DIM-Reader JAR does not expose franchiseId on BemHeader.
+            franchise = card.header.dimId
         }
         val cardMetaEntity = CardMetaEntity(cardName, card.header.dimId, card.checksum, cardType, franchise, null)
         cardMetaEntityDao.insert(cardMetaEntity)

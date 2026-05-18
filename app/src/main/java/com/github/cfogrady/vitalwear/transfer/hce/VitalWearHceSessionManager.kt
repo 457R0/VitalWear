@@ -25,6 +25,7 @@ object VitalWearHceSessionManager {
     private var mode: Mode = Mode.IDLE
     private var sendPayload: ByteArray = byteArrayOf()
     private var receiveBuffer = ByteArrayOutputStream()
+    private var negotiatedMaxChunkSize: Int = VitalWearHceProtocol.PREFERRED_MAX_CHUNK_SIZE
     private val _transferStatus = MutableStateFlow(TransferStatus.IDLE)
 
     val transferStatus: StateFlow<TransferStatus>
@@ -54,12 +55,18 @@ object VitalWearHceSessionManager {
         }
     }
 
-    fun negotiate(modeByte: Byte): SessionSnapshot? {
+    internal fun negotiate(modeByte: Byte, requestedMaxChunkSize: Int): VitalWearHceSessionInfo? {
         synchronized(lock) {
+            val agreedChunkSize = requestedMaxChunkSize.coerceIn(1, VitalWearHceProtocol.PREFERRED_MAX_CHUNK_SIZE)
+            negotiatedMaxChunkSize = agreedChunkSize
             return when (modeByte) {
                 VitalWearHceProtocol.MODE_WATCH_TO_PHONE -> {
                     if (mode == Mode.SEND_TO_PHONE) {
-                        SessionSnapshot(mode, sendPayload.size)
+                        VitalWearHceSession(
+                            direction = VitalWearHceTransferDirection.WATCH_TO_PHONE,
+                            maxChunkSize = agreedChunkSize,
+                            payloadLength = sendPayload.size,
+                        )
                     } else {
                         null
                     }
@@ -67,7 +74,11 @@ object VitalWearHceSessionManager {
                 VitalWearHceProtocol.MODE_PHONE_TO_WATCH -> {
                     if (mode == Mode.RECEIVE_FROM_PHONE) {
                         receiveBuffer = ByteArrayOutputStream()
-                        SessionSnapshot(mode, 0)
+                        VitalWearHceSession(
+                            direction = VitalWearHceTransferDirection.PHONE_TO_WATCH,
+                            maxChunkSize = agreedChunkSize,
+                            payloadLength = 0,
+                        )
                     } else {
                         null
                     }
@@ -85,7 +96,8 @@ object VitalWearHceSessionManager {
             if (offset == sendPayload.size) {
                 return byteArrayOf()
             }
-            val chunkEnd = (offset + maxChunkSize).coerceAtMost(sendPayload.size)
+            val effectiveMaxChunkSize = maxChunkSize.coerceAtMost(negotiatedMaxChunkSize)
+            val chunkEnd = (offset + effectiveMaxChunkSize).coerceAtMost(sendPayload.size)
             return sendPayload.copyOfRange(offset, chunkEnd)
         }
     }
@@ -117,6 +129,7 @@ object VitalWearHceSessionManager {
             mode = Mode.IDLE
             sendPayload = byteArrayOf()
             receiveBuffer = ByteArrayOutputStream()
+            negotiatedMaxChunkSize = VitalWearHceProtocol.PREFERRED_MAX_CHUNK_SIZE
             if (resetStatus) {
                 _transferStatus.value = TransferStatus.IDLE
             }
@@ -141,9 +154,5 @@ object VitalWearHceSessionManager {
         }
     }
 
-    data class SessionSnapshot(
-        val mode: Mode,
-        val payloadLength: Int,
-    )
 }
 

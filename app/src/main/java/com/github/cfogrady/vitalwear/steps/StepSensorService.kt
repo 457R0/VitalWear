@@ -38,14 +38,21 @@ class StepSensorService (
      * Handles the a boot up of the application.
      */
     fun startup() {
-        Timber.i("Handling startup")
-        val stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
-        if(stepSensor == null) {
-            Timber.e("No Step Sensor On Device")
-            return
-        }
-        if(!sensorManager.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_NORMAL, sensorThreadHandler.handler)) {
-            Timber.e("Unable to register step sensor")
+        try {
+            Timber.i("Handling startup")
+            val stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+            if(stepSensor == null) {
+                Timber.e("No Step Sensor On Device")
+                return
+            }
+            if(!sensorManager.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_NORMAL, sensorThreadHandler.handler)) {
+                Timber.e("Unable to register step sensor")
+                return
+            }
+        } catch (se: SecurityException) {
+            Timber.e(se, "Missing permission to start step sensor")
+        } catch (e: Exception) {
+            Timber.e(e, "Unexpected failure starting step sensor")
             return
         }
     }

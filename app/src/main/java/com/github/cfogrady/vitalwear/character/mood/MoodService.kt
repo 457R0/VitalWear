@@ -33,16 +33,22 @@ class MoodService(
     private var lastLevel : Int = 0
 
     @Synchronized fun initialize() {
-        if (offBodySensor == null) {
-            val maybeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LOW_LATENCY_OFFBODY_DETECT)
-            if (maybeSensor == null) {
-                Timber.e("No off body sensor!")
-            } else {
-                offBodySensor = maybeSensor
-                if(!sensorManager.registerListener(offBodySensorEvenListener, offBodySensor, SensorManager.SENSOR_DELAY_NORMAL)) {
-                    Timber.e("Can't setup body sensor!")
+        try {
+            if (offBodySensor == null) {
+                val maybeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LOW_LATENCY_OFFBODY_DETECT)
+                if (maybeSensor == null) {
+                    Timber.e("No off body sensor!")
+                } else {
+                    offBodySensor = maybeSensor
+                    if(!sensorManager.registerListener(offBodySensorEvenListener, offBodySensor, SensorManager.SENSOR_DELAY_NORMAL)) {
+                        Timber.e("Can't setup body sensor!")
+                    }
                 }
             }
+        } catch (se: SecurityException) {
+            Timber.e(se, "Missing permission to start mood sensor")
+        } catch (e: Exception) {
+            Timber.e(e, "Unexpected failure starting mood sensor")
         }
 //        vbUpdater.scheduleExactMoodUpdates()
     }

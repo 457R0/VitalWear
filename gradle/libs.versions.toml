@@ -10,7 +10,6 @@ coilCompose = "2.2.2"
 composeWear = "1.4.0"
 concurrentFuturesKtx = "1.2.0"
 coreKtx = "1.15.0"
-dimReader = "7845f2aba7"
 espressoCore = "3.6.1"
 guava = "31.1-android"
 junit = "4.13.2"
@@ -74,7 +73,6 @@ androidx-work-runtime = { module = "androidx.work:work-runtime", version.ref = "
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntime" }
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coilCompose" }
 coil-gif = { module = "io.coil-kt:coil-gif", version.ref = "coilCompose" }
-dim-reader = { module = "com.github.cfogrady:vb-dim-reader", version.ref = "dimReader" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutinesPlayServices" }

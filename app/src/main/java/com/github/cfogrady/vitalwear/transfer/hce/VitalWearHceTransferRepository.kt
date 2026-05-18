@@ -16,6 +16,9 @@ import com.github.cfogrady.vitalwear.transfer.remapImportedRootCardName
 import com.github.cfogrady.vitalwear.transfer.toProto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
 
 class VitalWearHceTransferRepository(
@@ -24,6 +27,8 @@ class VitalWearHceTransferRepository(
     companion object {
         private const val TAG = "VW_HCE_IMPORT"
     }
+
+    private val seenSyncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun deleteCurrentCharacterAfterSuccessfulSend() {
         app.characterManager.deleteCurrentCharacter()
@@ -77,12 +82,6 @@ class VitalWearHceTransferRepository(
 
         val importCharacter = sanitized.remapImportedRootCardName(resolvedCardName)
         Log.i(TAG, "Importing character card=${importCharacter.cardName} slot=${importCharacter.characterStats.slotId}")
-        runCatching {
-            app.sharedTransferSeenDao.recordImportedCharacterSeen(importCharacter, System.currentTimeMillis())
-        }.onFailure {
-            // Watch import should remain successful even if cross-process transfer-seen sync is unavailable.
-            Log.w(TAG, "Transfer-seen sync unavailable; continuing import", it)
-        }
         val characterId = app.characterManager.addCharacter(
             importCharacter.cardName,
             importCharacter.characterStats.toCharacterEntity(importCharacter.cardName),
@@ -108,6 +107,15 @@ class VitalWearHceTransferRepository(
         if (!activationSucceeded) {
             Log.w(TAG, "Character import persisted but activation verification failed")
             return false
+        }
+
+        seenSyncScope.launch {
+            runCatching {
+                app.sharedTransferSeenDao.recordImportedCharacterSeen(importCharacter, System.currentTimeMillis())
+            }.onFailure {
+                // Watch import should remain successful even if cross-process transfer-seen sync is unavailable.
+                Log.w(TAG, "Transfer-seen sync unavailable; continuing import", it)
+            }
         }
 
         // Keep COMMIT fast on HCE: heavy sprite file checks can outlive NFC field and cause TagLost.

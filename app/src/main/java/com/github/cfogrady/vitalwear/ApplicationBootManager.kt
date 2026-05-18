@@ -11,6 +11,8 @@ import com.github.cfogrady.vitalwear.steps.StepSensorService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import timber.log.Timber
 
 class ApplicationBootManager(private val characterManager: CharacterManagerImpl,
                              private val firmwareManager: FirmwareManager,
@@ -24,20 +26,27 @@ class ApplicationBootManager(private val characterManager: CharacterManagerImpl,
     @Synchronized
     fun onStartup(context: Context) {
         CoroutineScope(Dispatchers.IO).launch {
-            // parallelize firmware manager, character manager, step service, and notificationChannelManager
-            launch {
-                firmwareManager.loadFirmware(context)
-            }
-            launch {
-                characterManager.init(context, vbUpdater)
-                moodService.initialize()
-                complicationRefreshService.startupPartnerComplications()
-            }
-            launch {
-                stepService.startup()
-            }
-            launch {
-                notificationChannelManager.createNotificationChannel()
+            supervisorScope {
+                // parallelize firmware manager, character manager, step service, and notificationChannelManager
+                launch {
+                    runCatching { firmwareManager.loadFirmware(context) }
+                        .onFailure { Timber.e(it, "Firmware startup task failed") }
+                }
+                launch {
+                    runCatching {
+                        characterManager.init(context, vbUpdater)
+                        moodService.initialize()
+                        complicationRefreshService.startupPartnerComplications()
+                    }.onFailure { Timber.e(it, "Character/mood startup task failed") }
+                }
+                launch {
+                    runCatching { stepService.startup() }
+                        .onFailure { Timber.e(it, "Step sensor startup task failed") }
+                }
+                launch {
+                    runCatching { notificationChannelManager.createNotificationChannel() }
+                        .onFailure { Timber.e(it, "Notification channel startup task failed") }
+                }
             }
         }
     }

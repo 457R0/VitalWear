@@ -27,7 +27,7 @@ object VitalWearHceProtocol {
     const val SW_WRONG_P1P2: Int = 0x6B00
     const val SW_INTERNAL_ERROR: Int = 0x6F00
 
-    const val DEFAULT_MAX_CHUNK_SIZE = 180
+    const val PREFERRED_MAX_CHUNK_SIZE = 2048
 
     fun isSelectAidApdu(commandApdu: ByteArray): Boolean {
         if (commandApdu.size < 5) {
@@ -48,12 +48,25 @@ object VitalWearHceProtocol {
         if (commandApdu.size < 5) {
             return byteArrayOf()
         }
-        val lc = commandApdu[4].toInt() and 0xFF
-        val dataEnd = 5 + lc
+        val lcByte = commandApdu[4].toInt() and 0xFF
+        if (lcByte != 0) {
+            val dataEnd = 5 + lcByte
+            if (dataEnd > commandApdu.size) {
+                return byteArrayOf()
+            }
+            return commandApdu.copyOfRange(5, dataEnd)
+        }
+        // Extended APDU (Lc on 2 bytes) path.
+        if (commandApdu.size < 7) {
+            return byteArrayOf()
+        }
+        val extendedLc = ((commandApdu[5].toInt() and 0xFF) shl 8) or (commandApdu[6].toInt() and 0xFF)
+        val dataStart = 7
+        val dataEnd = dataStart + extendedLc
         if (dataEnd > commandApdu.size) {
             return byteArrayOf()
         }
-        return commandApdu.copyOfRange(5, dataEnd)
+        return commandApdu.copyOfRange(dataStart, dataEnd)
     }
 
     fun buildResponse(data: ByteArray = byteArrayOf(), statusWord: Int = SW_OK): ByteArray {

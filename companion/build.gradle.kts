@@ -81,7 +81,9 @@ dependencies {
     implementation(libs.androidx.activity.compose)
 
     //VB-DIM-Reader
-    implementation(libs.dim.reader)
+    implementation(files("../../VB-DIM-Reader-2.0.0/build/libs/VB-DIM-Reader.jar"))
+    implementation("org.slf4j:slf4j-api:1.7.36")
+    implementation("at.favre.lib:bytes:1.5.0")
 
     //SLF4J and Logging
     // runtimeOnly 'org.slf4j:slf4j-android:1.7.26'

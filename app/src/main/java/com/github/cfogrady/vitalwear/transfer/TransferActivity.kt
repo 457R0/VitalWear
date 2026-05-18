@@ -191,11 +191,12 @@ fun TransformationHistoryEntity.toProto(): Character.TransformationEvent {
 }
 
 fun List<Character.TransformationEvent>.toTransformationHistoryEntities(): List<TransformationHistoryEntity> {
-    val transformations = mutableListOf<TransformationHistoryEntity>()
-    for(transformation in this) {
-        transformations.add(transformation.toTransformationHistoryEntitiy())
+    val dedupedByPhase = linkedMapOf<Int, TransformationHistoryEntity>()
+    for (transformation in this) {
+        // Import payloads can contain duplicate phases; DB enforces unique (characterId, phase).
+        dedupedByPhase[transformation.phase] = transformation.toTransformationHistoryEntitiy()
     }
-    return transformations
+    return dedupedByPhase.values.toList()
 }
 
 fun Character.TransformationEvent.toTransformationHistoryEntitiy(): TransformationHistoryEntity {

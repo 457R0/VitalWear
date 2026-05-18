@@ -8,6 +8,11 @@ import androidx.room.Transaction
 
 @Dao
 interface SharedTransferSeenDao {
+    data class TransferSeenRecord(
+        val cardName: String,
+        val slotId: Int,
+    )
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insert(entry: SharedTransferSeenEntity): Long
 
@@ -24,23 +29,26 @@ interface SharedTransferSeenDao {
 
     @Transaction
     fun markSeen(cardName: String, slotId: Int, seenAtEpochMillis: Long) {
-        if (slotId < 0) {
-            return
-        }
-        val cardLookupKey = cardName.lowercase().filter { it.isLetterOrDigit() }
-        if (cardLookupKey.isBlank()) {
-            return
-        }
-        val inserted = insert(
-            SharedTransferSeenEntity(
-                cardName = cardName,
-                cardLookupKey = cardLookupKey,
-                slotId = slotId,
-                seenAtEpochMillis = seenAtEpochMillis,
+        markSeen(listOf(TransferSeenRecord(cardName, slotId)), seenAtEpochMillis)
+    }
+
+    @Transaction
+    fun markSeen(entries: List<TransferSeenRecord>, seenAtEpochMillis: Long) {
+        for (entry in entries.distinctBy { it.cardName to it.slotId }) {
+            if (entry.slotId < 0) continue
+            val cardLookupKey = entry.cardName.lowercase().filter { it.isLetterOrDigit() }
+            if (cardLookupKey.isBlank()) continue
+            val inserted = insert(
+                SharedTransferSeenEntity(
+                    cardName = entry.cardName,
+                    cardLookupKey = cardLookupKey,
+                    slotId = entry.slotId,
+                    seenAtEpochMillis = seenAtEpochMillis,
+                )
             )
-        )
-        if (inserted == -1L) {
-            update(cardName, cardLookupKey, slotId, seenAtEpochMillis)
+            if (inserted == -1L) {
+                update(entry.cardName, cardLookupKey, entry.slotId, seenAtEpochMillis)
+            }
         }
     }
 }
