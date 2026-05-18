@@ -16,7 +16,8 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.github.cfogrady.vitalwear"
+        // Must match VBHelper phone appId for Wear Data Layer message/channel delivery.
+        applicationId = "com.github.nacabaro.vbhelper"
         minSdk = 28
         targetSdk = 34
         versionCode = libs.versions.projectVersionCode.get().toInt()
@@ -49,7 +50,7 @@ android {
             )
         }
         debug {
-            applicationIdSuffix = ".debug"
+            // Keep debug package identical to VBHelper during companion-tools testing.
         }
     }
     buildFeatures {

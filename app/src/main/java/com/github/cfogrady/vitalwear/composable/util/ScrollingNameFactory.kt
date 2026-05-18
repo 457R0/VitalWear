@@ -1,8 +1,6 @@
 package com.github.cfogrady.vitalwear.composable.util
 
 import android.graphics.Bitmap
-import android.os.Handler
-import android.os.Looper
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -14,8 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 class ScrollingNameFactory(private val backgroundHeight: Dp, private val bitmapScaler: BitmapScaler) {
     @Composable
@@ -31,12 +28,9 @@ class ScrollingNameFactory(private val backgroundHeight: Dp, private val bitmapS
             //only do this if we aren't running and we aren't at the start state
             if(!nameScroll.isRunning && nameScroll.value > 0f) {
                 running = false
-                Handler(Looper.getMainLooper()!!).postDelayed({
-                    GlobalScope.launch {
-                        nameScroll.snapTo(0f)
-                        running = true
-                    }
-                }, 500)
+                delay(500)
+                nameScroll.snapTo(0f)
+                running = true
             }
         }
         val offset = backgroundHeight.div(2)

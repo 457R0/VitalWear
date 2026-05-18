@@ -38,6 +38,8 @@ class PartnerComplicationService : ComplicationDataSourceService() {
 
     override fun onComplicationDeactivated(complicationInstanceId: Int) {
         super.onComplicationDeactivated(complicationInstanceId)
+        val complicationRefreshService = (application as VitalWearApp).complicationRefreshService
+        complicationRefreshService.stopPartnerComplications()
     }
 
     private fun complicationResult() : ComplicationData {

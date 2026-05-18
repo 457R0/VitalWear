@@ -8,7 +8,7 @@ class SaveDataRepository(
 ) {
     val saveDataFlow: Flow<SaveData> = saveDataStore.data
 
-    suspend fun togglePermissionsAlreadyRequested() {
+    suspend fun markPermissionsAlreadyRequested() {
         saveDataStore.updateData { currentSaveData->
             currentSaveData.toBuilder().setPermissionsAlreadyRequested(true).build()
         }

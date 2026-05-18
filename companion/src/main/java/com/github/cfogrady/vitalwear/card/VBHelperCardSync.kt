@@ -29,7 +29,7 @@ object VBHelperCardSync {
 
     /**
      * Returns the set of card names already stored in VBHelper's database.
-     * Used by [ImportCardActivity] to warn the user before re-importing a duplicate.
+     * Retained for compatibility with legacy companion card sync flows.
      */
     fun getImportedCardNames(context: Context): Set<String> {
         return runCatching {

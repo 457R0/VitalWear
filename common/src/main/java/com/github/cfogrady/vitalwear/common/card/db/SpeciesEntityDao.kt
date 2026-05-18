@@ -16,4 +16,6 @@ interface SpeciesEntityDao {
     @Insert
     fun insertAll(speciesEntities: Collection<SpeciesEntity>)
 
+    @Upsert
+    fun upsert(speciesEntity: SpeciesEntity)
 }

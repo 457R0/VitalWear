@@ -14,6 +14,7 @@ import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
+import java.io.EOFException
 import java.io.InputStream
 import java.nio.charset.Charset
 
@@ -71,8 +72,9 @@ class CardReceiver(
         val channelClient = Wearable.getChannelClient(context)
         var cardName: String? = null
         var success = false
+        Timber.i("Starting card channel import: node=${channel.nodeId}, path=${channel.path}")
         withContext(Dispatchers.IO) {
-            channelClient.getInputStream(channel).await().use {rawStream ->
+            channelClient.getInputStream(channel).await().use { rawStream ->
                 try {
                     val cardStream = DataInputStream(BufferedInputStream(rawStream))
                     cardName = getName(cardStream)
@@ -80,7 +82,9 @@ class CardReceiver(
                     _cardImportState.value = CardImportState.TRANSFERRING
                     _cardImportProgress.value = CardImportProgress(CardImportStage.Receiving, 0L, cardName)
                     val uniqueSprites = cardStream.read() != 0
+                    val convertToBem = cardStream.read() != 0
                     val payloadSize = cardStream.readInt()
+                    Timber.i("Card metadata read: card=$cardName, uniqueSprites=$uniqueSprites, payloadBytes=$payloadSize")
                     if (payloadSize <= 0) {
                         throw IllegalStateException("Card payload was empty")
                     }
@@ -99,6 +103,9 @@ class CardReceiver(
                             throw IllegalStateException("Card transfer ended early")
                         }
                         totalRead += bytesRead
+                        if (totalRead == payloadSize || totalRead % 65536 == 0) {
+                            Timber.d("Card payload progress: card=$cardName, bytesRead=$totalRead/$payloadSize")
+                        }
                         val transferPercent = ((totalRead * 100L) / payloadSize).toInt()
                         val mappedPercent = (transferPercent * 90) / 100
                         _cardImportPercent.value = mappedPercent
@@ -118,12 +125,13 @@ class CardReceiver(
                         95,
                         NotificationChannelManager.CARD_IMPORT_PROGRESS_ID,
                     )
-                    cardLoader.importCard(context, cardName, ByteArrayInputStream(cardBytes), uniqueSprites)
+                    cardLoader.importCard(context, cardName, ByteArrayInputStream(cardBytes), uniqueSprites, convertToBem)
                     success = true
                     _cardsImported.value++
                     _cardImportPercent.value = 100
                     _cardImportState.value = CardImportState.SUCCESS
                     _cardImportProgress.value = CardImportProgress(CardImportStage.Complete, totalRead.toLong(), cardName)
+                    Timber.i("Card import stored successfully: card=$cardName, bytes=$payloadSize")
                     notificationChannelManager.sendProgressNotification(
                         context,
                         "Importing $cardName",
@@ -131,13 +139,18 @@ class CardReceiver(
                         NotificationChannelManager.CARD_IMPORT_PROGRESS_ID,
                     )
                 } catch (e: Exception) {
-                    Timber.e(e, "Unable to load received card data")
+                    Timber.e(e, "Unable to load received card data for card=$cardName")
                     _cardImportState.value = CardImportState.FAILURE
                     _cardImportProgress.value = CardImportProgress(CardImportStage.Failed, _cardImportProgress.value.bytesReceived, cardName)
                     notificationChannelManager.cancelNotification(NotificationChannelManager.CARD_IMPORT_PROGRESS_ID)
+                } finally {
+                    runCatching {
+                        channelClient.close(channel).await()
+                    }.onFailure {
+                        Timber.w(it, "Failed closing card transfer channel for card=$cardName")
+                    }
                 }
             }
-            channelClient.close(channel)
         }
         return ImportCardResult(success, cardName)
     }
@@ -147,6 +160,9 @@ class CardReceiver(
         val nameBytes = ByteArrayOutputStream()
         do {
             lastReadByte = inputStream.read()
+            if (lastReadByte < 0) {
+                throw EOFException("Card name terminator missing from transfer stream")
+            }
             if(lastReadByte != 0) {
                 nameBytes.write(lastReadByte)
             }

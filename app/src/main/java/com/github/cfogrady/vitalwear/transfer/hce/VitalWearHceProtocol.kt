@@ -10,6 +10,9 @@ object VitalWearHceProtocol {
     const val INS_READ_CHUNK: Byte = 0x20
     const val INS_WRITE_CHUNK: Byte = 0x30
     const val INS_COMMIT: Byte = 0x40
+    const val INS_STATUS: Byte = 0x50
+    const val INS_SYNC_UI: Byte = 0x60
+    const val INS_VIBRATE: Byte = 0x70
 
     const val MODE_WATCH_TO_PHONE: Byte = 0x01
     const val MODE_PHONE_TO_WATCH: Byte = 0x02

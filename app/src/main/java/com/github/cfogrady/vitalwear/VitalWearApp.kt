@@ -168,7 +168,7 @@ class VitalWearApp : Application(), Configuration.Provider {
         cardMetaEntityDao = database.cardMetaEntityDao()
         val cardSpriteLoader = CardSpriteLoader()
         val commonCardLoader = CardLoader(characterSpritesIO, cardSpriteLoader, cardSpriteIO, cardMetaEntityDao, database.speciesEntityDao(), database.transformationEntityDao(), database.adventureEntityDao(), database.attributeFusionEntityDao(), database.specificFusionEntityDao(), DimReader())
-        cardLoader = AppCardLoader(commonCardLoader, database.cardSettingsDao())
+        cardLoader = AppCardLoader(commonCardLoader, database.cardSettingsDao(), database.speciesEntityDao(), dimToBemStatConversion)
         val sensorManager = applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         vitalService = VitalService(characterManager, complicationRefreshService)
         heartRateService = HeartRateService(sensorManager, sensorThreadHandler)

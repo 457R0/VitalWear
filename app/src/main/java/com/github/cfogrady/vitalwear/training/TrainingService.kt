@@ -20,8 +20,6 @@ class TrainingService (
     private val heartRateService: HeartRateService,
     private val saveService: SaveService,
 ) {
-    companion object {
-    }
 
     var backgroundTrainingProgressTracker: TrainingProgressTracker? = null
 

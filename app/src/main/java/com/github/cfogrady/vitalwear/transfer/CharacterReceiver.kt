@@ -33,7 +33,7 @@ class CharacterReceiver(
             channelClient.getInputStream(channel).await().use { input ->
                 try {
                     val character = Character.parseFrom(input).sanitizeForImport()
-                    val matchedCard = character.resolveImportedCardMeta(cardMetaEntityDao, speciesEntityDao)
+                    val matchedCard = character.resolveImportedCardMetaOrPlaceholder(context, cardMetaEntityDao, speciesEntityDao)
                     importedCardName = matchedCard?.cardName ?: character.cardName
                     val validationError = character.validateForImport(cardMetaEntityDao, speciesEntityDao, matchedCard)
                     if (validationError != null) {

@@ -15,6 +15,7 @@ object VitalWearHceSessionManager {
         IDLE,
         ARMED_SEND,
         ARMED_RECEIVE,
+        SYNCING,
         SUCCESS,
         FAILURE,
     }
@@ -125,6 +126,12 @@ object VitalWearHceSessionManager {
     fun markSuccess() {
         synchronized(lock) {
             _transferStatus.value = TransferStatus.SUCCESS
+        }
+    }
+
+    fun markSyncing() {
+        synchronized(lock) {
+            _transferStatus.value = TransferStatus.SYNCING
         }
     }
 

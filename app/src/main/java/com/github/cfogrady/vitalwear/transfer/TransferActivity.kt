@@ -1,5 +1,6 @@
 package com.github.cfogrady.vitalwear.transfer
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.WindowManager
@@ -82,6 +83,7 @@ class TransferActivity: ComponentActivity(), TransferScreenController {
             val transformationHistory = characterManager.getTransformationHistory(it.characterStats.id)
             val app = application as VitalWearApp
             return activeCharacter.toProto(
+                context = this,
                 transformationHistory = transformationHistory,
                 maxAdventureCompletedByCard = maxAdventureIdxCompletedByCard,
                 currentExerciseLevel = app.heartRateService.currentExerciseLevel.value,
@@ -103,7 +105,7 @@ class TransferActivity: ComponentActivity(), TransferScreenController {
 
     override suspend fun receiveCharacter(character: Character): Boolean {
         val sanitizedCharacter = character.sanitizeForImport()
-        val matchedCard = sanitizedCharacter.resolveImportedCardMeta(cardMetaEntityDao, speciesEntityDao)
+        val matchedCard = sanitizedCharacter.resolveImportedCardMetaOrPlaceholder(this, cardMetaEntityDao, speciesEntityDao)
         val validationError = sanitizedCharacter.validateForImport(cardMetaEntityDao, speciesEntityDao, matchedCard)
         if (validationError != null) {
             lastReceiedCharacter.emit(null)
@@ -140,6 +142,7 @@ class TransferActivity: ComponentActivity(), TransferScreenController {
 }
 
 fun VBCharacter.toProto(
+    context: Context,
     transformationHistory: List<TransformationHistoryEntity>,
     maxAdventureCompletedByCard: Map<String, Int>,
     currentExerciseLevel: Int = 0,
@@ -164,6 +167,10 @@ fun VBCharacter.toProto(
         .setSettings(this.settings.toProto())
         .addAllTransformationHistory(transformationHistory.toProtoList())
         .putAllMaxAdventureCompletedByCard(maxAdventureCompletedByCard)
+        .setTransferCard(this.buildTransferCardMetadata())
+        .apply {
+            this@toProto.buildTransferSpeciesMetadata(context)?.let { setTransferSpecies(it) }
+        }
         .build()
 }
 
@@ -254,13 +261,10 @@ fun CharacterEntity.toProto(
         .build()
 }
 
-private fun VBCharacter.toTransferDeviceType(): Character.CharacterStats.TransferDeviceType {
-    return if (cardMeta.cardType == CardType.BEM || settings.assumedFranchise != null || characterStats.trainedHp > 0 || characterStats.trainedAp > 0 || characterStats.trainedBp > 0) {
-        Character.CharacterStats.TransferDeviceType.TRANSFER_DEVICE_TYPE_BE
-    } else {
-        Character.CharacterStats.TransferDeviceType.TRANSFER_DEVICE_TYPE_VB
+    private fun VBCharacter.toTransferDeviceType(): Character.CharacterStats.TransferDeviceType {
+        return Character.CharacterStats.TransferDeviceType.TRANSFER_DEVICE_TYPE_BE
     }
-}
+
 
 fun CharacterSettings.toProto(): Character.Settings {
     var builder = Character.Settings.newBuilder()

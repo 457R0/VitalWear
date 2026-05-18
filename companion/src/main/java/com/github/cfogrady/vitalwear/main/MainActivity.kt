@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import com.github.cfogrady.vitalwear.VitalWearCompanion
-import com.github.cfogrady.vitalwear.card.ImportCardActivity
 import com.github.cfogrady.vitalwear.common.log.TinyLogTree
 import com.github.cfogrady.vitalwear.firmware.FirmwareImportActivity
 import com.github.cfogrady.vitalwear.logs.LoadingLogActivity
@@ -32,9 +31,13 @@ class MainActivity : ComponentActivity() {
     @Composable fun MainComposable() {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             Button(onClick = {
-                startActivity(Intent(applicationContext, ImportCardActivity::class.java))
+                Toast.makeText(
+                    applicationContext,
+                    "Card import moved to VBHelper. Use VBHelper to import DIM/BEM cards.",
+                    Toast.LENGTH_LONG,
+                ).show()
             }) {
-                Text(text = "Import Card Image", color = Color.Cyan)
+                Text(text = "Import Card Image (Moved to VBHelper)", color = Color.Cyan)
             }
             Button(onClick = {
                 startActivity(Intent(applicationContext, FirmwareImportActivity::class.java))

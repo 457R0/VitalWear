@@ -2,6 +2,7 @@ package com.github.cfogrady.vitalwear.transfer.hce
 
 import android.nfc.cardemulation.HostApduService
 import android.os.Bundle
+import android.util.Log
 import com.github.cfogrady.vitalwear.VitalWearApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -10,6 +11,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class VitalWearHostApduService : HostApduService() {
+    companion object {
+        private const val TAG = "VW_HCE_SERVICE"
+    }
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val repository: VitalWearHceTransferRepository by lazy {
@@ -43,9 +48,13 @@ class VitalWearHostApduService : HostApduService() {
                 VitalWearHceProtocol.INS_READ_CHUNK -> handleReadChunk(data)
                 VitalWearHceProtocol.INS_WRITE_CHUNK -> handleWriteChunk(data)
                 VitalWearHceProtocol.INS_COMMIT -> handleCommit()
+                VitalWearHceProtocol.INS_STATUS -> handleStatus()
+                VitalWearHceProtocol.INS_SYNC_UI -> handleSyncUi(data)
+                VitalWearHceProtocol.INS_VIBRATE -> handleVibrate(data)
                 else -> VitalWearHceProtocol.buildResponse(statusWord = VitalWearHceProtocol.SW_FUNC_NOT_SUPPORTED)
             }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.e(TAG, "APDU handling failed for INS=${String.format("0x%02X", ins)}", error)
             VitalWearHceProtocol.buildResponse(statusWord = VitalWearHceProtocol.SW_INTERNAL_ERROR)
         }
     }
@@ -155,10 +164,14 @@ class VitalWearHostApduService : HostApduService() {
                 serviceScope.launch {
                     val importSuccess = runCatching {
                         repository.importCharacter(payload)
+                    }.onFailure {
+                        Log.e(TAG, "Async import threw exception", it)
                     }.getOrDefault(false)
                     if (importSuccess) {
+                        Log.i(TAG, "Async import marked SUCCESS")
                         VitalWearHceSessionManager.markSuccess()
                     } else {
+                        Log.w(TAG, "Async import marked FAILURE")
                         VitalWearHceSessionManager.markFailure()
                     }
                 }
@@ -170,6 +183,30 @@ class VitalWearHostApduService : HostApduService() {
                 VitalWearHceProtocol.buildResponse(statusWord = VitalWearHceProtocol.SW_CONDITIONS_NOT_SATISFIED)
             }
         }
+    }
+
+    private fun handleStatus(): ByteArray {
+        val statusByte = when (VitalWearHceSessionManager.transferStatus.value) {
+            VitalWearHceSessionManager.TransferStatus.IDLE -> 0x00.toByte()
+            VitalWearHceSessionManager.TransferStatus.ARMED_SEND -> 0x01.toByte()
+            VitalWearHceSessionManager.TransferStatus.ARMED_RECEIVE -> 0x02.toByte()
+            VitalWearHceSessionManager.TransferStatus.SYNCING -> 0x03.toByte()
+            VitalWearHceSessionManager.TransferStatus.SUCCESS -> 0x04.toByte()
+            VitalWearHceSessionManager.TransferStatus.FAILURE -> 0x05.toByte()
+        }
+        return VitalWearHceProtocol.buildResponse(byteArrayOf(statusByte))
+    }
+
+    private fun handleSyncUi(data: ByteArray): ByteArray {
+        // Implement UI sync logic (e.g., trigger animation via a broadcast or event bus)
+        // For now, mark as sync-in-progress
+        VitalWearHceSessionManager.markSyncing()
+        return VitalWearHceProtocol.buildResponse()
+    }
+
+    private fun handleVibrate(data: ByteArray): ByteArray {
+        // Trigger haptic feedback
+        return VitalWearHceProtocol.buildResponse()
     }
 }
 

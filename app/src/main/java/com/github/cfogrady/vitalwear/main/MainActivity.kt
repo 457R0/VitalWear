@@ -9,11 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.getValue
 import androidx.core.app.ActivityCompat
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.github.cfogrady.vitalwear.SaveData
 import com.github.cfogrady.vitalwear.SaveDataRepository
 import com.github.cfogrady.vitalwear.VitalWearApp
 import com.github.cfogrady.vitalwear.adventure.AdventureActivityLauncher
@@ -33,10 +30,6 @@ import timber.log.Timber
 import java.time.LocalDateTime
 
 class MainActivity : ComponentActivity() {
-    companion object {
-        val TAG = "MainActivity"
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val saveDataRepository = (application as VitalWearApp).saveDataRepository
@@ -56,10 +49,6 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         val characterManager = (application as VitalWearApp).characterManager
         characterManager.getCurrentCharacter()?.characterStats?.updateTimeStamps(LocalDateTime.now())
-    }
-
-    override fun onStop() {
-        super.onStop()
     }
 
     private fun buildActivityLaunchers(): ActivityLaunchers {
@@ -95,7 +84,7 @@ class MainActivity : ComponentActivity() {
                     Toast.makeText(this, "Denied permissions may cause bugs", Toast.LENGTH_SHORT).show()
                     Timber.i("Permissions not provided for: $deniedPermissions")
                     lifecycleScope.launch {
-                        saveDataRepository.togglePermissionsAlreadyRequested()
+                        saveDataRepository.markPermissionsAlreadyRequested()
                     }
                 } else if(missingBackgroundPermissions.isNotEmpty()) {
                     backgroundPermissionRequestLauncher.launch(missingBackgroundPermissions.toTypedArray())
@@ -122,7 +111,7 @@ class MainActivity : ComponentActivity() {
                 finish()
             }
             lifecycleScope.launch {
-                saveDataRepository.togglePermissionsAlreadyRequested()
+                saveDataRepository.markPermissionsAlreadyRequested()
             }
         }
     }

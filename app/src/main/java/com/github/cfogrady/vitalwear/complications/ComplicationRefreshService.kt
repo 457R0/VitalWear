@@ -29,27 +29,51 @@ class ComplicationRefreshService(private val applicationContext: Context, privat
 
     fun startupPartnerComplications() {
         synchronized(this) {
-            if (partnerComplicationUpdater == null) {
+            if (partnerComplicationUpdater == null || partnerComplicationUpdater?.cancelled == true) {
                 Timber.i("Starting partner complication updates")
                 partnerComplicationUpdater = PartnerComplicationUpdater(applicationContext)
-                partnerComplicationUpdater!!.setupComplicationUpdate()
             } else {
                 Timber.i("Attempted to start partner complication updates, but updater is already running")
             }
+            partnerComplicationUpdater?.setupComplicationUpdate()
+        }
+    }
+
+    fun stopPartnerComplications() {
+        synchronized(this) {
+            partnerComplicationUpdater?.stop()
+            partnerComplicationUpdater = null
         }
     }
 
     class PartnerComplicationUpdater(private val applicationContext: Context) {
         var cancelled = false
+        private val handler = Handler(Looper.getMainLooper())
+        private var updateRunnable: Runnable? = null
 
+        @Synchronized
         fun setupComplicationUpdate() {
-            Handler(Looper.getMainLooper()!!).postDelayed({
-                updateComplicationState()
-                refreshComplication()
-                if(!cancelled) {
-                    setupComplicationUpdate()
+            if (cancelled || updateRunnable != null) {
+                return
+            }
+            updateRunnable = object : Runnable {
+                override fun run() {
+                    if (cancelled) {
+                        return
+                    }
+                    updateComplicationState()
+                    refreshComplication()
+                    handler.postDelayed(this, 500)
                 }
-            }, 500)
+            }
+            handler.post(updateRunnable!!)
+        }
+
+        @Synchronized
+        fun stop() {
+            cancelled = true
+            updateRunnable?.let { handler.removeCallbacks(it) }
+            updateRunnable = null
         }
 
         private fun updateComplicationState() {
@@ -74,6 +98,7 @@ class ComplicationRefreshService(private val applicationContext: Context, privat
     }
 
     fun cancel(workManager: WorkManager = WorkManager.getInstance(applicationContext)) {
+        stopPartnerComplications()
         workManager.cancelAllWorkByTag(PARTNER_WORK_TAG)
     }
 }

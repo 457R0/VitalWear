@@ -47,10 +47,10 @@ class CardLoader(
     private val dimReader: DimReader,
 ) {
 
-    fun importCardImage(applicationContext: Context, cardName: String, card: Card<*, *, *, *, *, *>, uniqueSprites: Boolean = false) {
+    fun importCardImage(applicationContext: Context, cardName: String, card: Card<*, *, *, *, *, *>, uniqueSprites: Boolean = false, convertToBem: Boolean = false) {
         val spritesByCharacterId = cardSpriteLoader.spritesByCharacterId(card)
         writeCardMeta(cardName, card)
-        writeSpeciesEntitiesAndSprites(applicationContext, cardName, card, uniqueSprites, spritesByCharacterId)
+        writeSpeciesEntitiesAndSprites(applicationContext, cardName, card, uniqueSprites, spritesByCharacterId, convertToBem)
         writeTransformations(cardName, card)
         writeAdventures(cardName, card)
         writeAttributeFusions(cardName, card)
@@ -58,12 +58,12 @@ class CardLoader(
         cardSpritesIO.saveCardSprites(applicationContext, cardName, card)
     }
 
-    fun importCardImage(applicationContext: Context, cardName: String, inputStream: InputStream, uniqueSprites: Boolean = false) {
+    fun importCardImage(applicationContext: Context, cardName: String, inputStream: InputStream, uniqueSprites: Boolean = false, convertToBem: Boolean = false) {
         val card = dimReader.readCard(inputStream, true)
         if(card.calculatedCheckSum != card.checksum) {
             throw IllegalStateException("Card Image has bad checksum. Expected: ${card.checksum} Actual: ${card.calculatedCheckSum}")
         }
-        importCardImage(applicationContext, cardName, card, uniqueSprites)
+        importCardImage(applicationContext, cardName, card, uniqueSprites, convertToBem)
     }
 
     private fun writeCardMeta(cardName: String, card: Card<*, *, *, *, *, *>) {
@@ -77,7 +77,7 @@ class CardLoader(
         cardMetaEntityDao.insert(cardMetaEntity)
     }
 
-    private fun writeSpeciesEntitiesAndSprites(applicationContext: Context, cardName: String, card: Card<*, *, *, *, *, *>, uniqueSprites: Boolean, spritesByCharacterId: List<List<Sprite>>) {
+    private fun writeSpeciesEntitiesAndSprites(applicationContext: Context, cardName: String, card: Card<*, *, *, *, *, *>, uniqueSprites: Boolean, spritesByCharacterId: List<List<Sprite>>, convertToBem: Boolean = false) {
         val speciesEntities = ArrayList<SpeciesEntity>()
         if(card is BemCard) {
             for((index, character) in card.characterStats.characterEntries.withIndex()) {

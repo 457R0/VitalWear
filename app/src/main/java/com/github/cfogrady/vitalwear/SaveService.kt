@@ -4,14 +4,20 @@ import android.content.SharedPreferences
 import android.content.SharedPreferences.Editor
 import com.github.cfogrady.vitalwear.character.CharacterManagerImpl
 import com.github.cfogrady.vitalwear.steps.StepIOService
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.time.LocalDateTime
 
 class SaveService(private val characterManager: CharacterManagerImpl, private val stepIOService: StepIOService, private val sharedPreferences: SharedPreferences) {
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun saveAsync(preferencesEditor: Editor = sharedPreferences.edit()) {
-        GlobalScope.launch(Dispatchers.IO) {
+        ioScope.launch {
             internalSave(preferencesEditor)
         }
     }

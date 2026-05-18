@@ -1,10 +1,12 @@
 package com.github.cfogrady.vitalwear.transfer.hce
 
+import android.util.Log
 import com.github.cfogrady.vitalwear.VitalWearApp
 import com.github.cfogrady.vitalwear.character.CharacterManager
 import com.github.cfogrady.vitalwear.character.data.CharacterState
 import com.github.cfogrady.vitalwear.protos.Character
-import com.github.cfogrady.vitalwear.transfer.resolveImportedCardMeta
+import com.github.cfogrady.vitalwear.transfer.resolveImportedCardMetaOrPlaceholder
+import com.github.cfogrady.vitalwear.transfer.recordImportedCharacterSeen
 import com.github.cfogrady.vitalwear.transfer.sanitizeForImport
 import com.github.cfogrady.vitalwear.transfer.toCharacterEntity
 import com.github.cfogrady.vitalwear.transfer.toCharacterSettings
@@ -19,6 +21,10 @@ import kotlinx.coroutines.withContext
 class VitalWearHceTransferRepository(
     private val app: VitalWearApp,
 ) {
+    companion object {
+        private const val TAG = "VW_HCE_IMPORT"
+    }
+
     fun deleteCurrentCharacterAfterSuccessfulSend() {
         app.characterManager.deleteCurrentCharacter()
     }
@@ -40,6 +46,7 @@ class VitalWearHceTransferRepository(
             val maxAdventureByCard = app.adventureService
                 .getMaxAdventureIdxByCardCompletedForCharacter(character.characterStats.id)
             character.toProto(
+                context = app.applicationContext,
                 transformationHistory = transformationHistory,
                 maxAdventureCompletedByCard = maxAdventureByCard,
                 currentExerciseLevel = app.heartRateService.currentExerciseLevel.value,
@@ -52,13 +59,30 @@ class VitalWearHceTransferRepository(
         val incoming = Character.parseFrom(payload)
         val sanitized = incoming.sanitizeForImport()
         val speciesDao = app.database.speciesEntityDao()
-        val matchedCard = sanitized.resolveImportedCardMeta(app.cardMetaEntityDao, speciesDao)
+        val matchedCard = sanitized.resolveImportedCardMetaOrPlaceholder(app.applicationContext, app.cardMetaEntityDao, speciesDao)
+        val resolvedCardName = matchedCard?.cardName
+            ?: sanitized.transferCard.cardName.takeIf { sanitized.hasTransferCard() && it.isNotBlank() }
+            ?: sanitized.cardName.takeIf { it.isNotBlank() }
+            ?: "Transferred Card"
         val validationError = sanitized.validateForImport(app.cardMetaEntityDao, speciesDao, matchedCard)
         if (validationError != null) {
-            return false
+            // VBH -> watch HCE can provide transfer metadata even when strict local card checks fail.
+            // In that case continue with best-effort import instead of rejecting the whole transfer.
+            if (!(sanitized.hasTransferCard() && sanitized.hasTransferSpecies())) {
+                Log.w(TAG, "Import validation failed: $validationError")
+                return false
+            }
+            Log.w(TAG, "Import validation mismatch tolerated due embedded transfer metadata: $validationError")
         }
 
-        val importCharacter = sanitized.remapImportedRootCardName(matchedCard!!.cardName)
+        val importCharacter = sanitized.remapImportedRootCardName(resolvedCardName)
+        Log.i(TAG, "Importing character card=${importCharacter.cardName} slot=${importCharacter.characterStats.slotId}")
+        runCatching {
+            app.sharedTransferSeenDao.recordImportedCharacterSeen(importCharacter, System.currentTimeMillis())
+        }.onFailure {
+            // Watch import should remain successful even if cross-process transfer-seen sync is unavailable.
+            Log.w(TAG, "Transfer-seen sync unavailable; continuing import", it)
+        }
         val characterId = app.characterManager.addCharacter(
             importCharacter.cardName,
             importCharacter.characterStats.toCharacterEntity(importCharacter.cardName),
@@ -66,15 +90,25 @@ class VitalWearHceTransferRepository(
             importCharacter.transformationHistoryList.toTransformationHistoryEntities()
         )
         app.adventureService.addCharacterAdventures(characterId, importCharacter.maxAdventureCompletedByCardMap)
-        app.characterManager.swapToCharacter(
-            app.applicationContext,
-            CharacterManager.SwapCharacterIdentifier.buildAnonymous(
-                importCharacter.cardName,
-                characterId,
-                importCharacter.characterStats.slotId,
-                CharacterState.STORED,
+        val activationSucceeded = runCatching {
+            app.characterManager.swapToCharacter(
+                app.applicationContext,
+                CharacterManager.SwapCharacterIdentifier.buildAnonymous(
+                    importCharacter.cardName,
+                    characterId,
+                    importCharacter.characterStats.slotId,
+                    CharacterState.STORED,
+                )
             )
-        )
+            app.characterManager.getCurrentCharacter()?.characterStats?.id == characterId
+        }.onFailure {
+            Log.w(TAG, "Character imported but activation failed", it)
+        }.getOrDefault(false)
+
+        if (!activationSucceeded) {
+            Log.w(TAG, "Character import persisted but activation verification failed")
+            return false
+        }
 
         // Keep COMMIT fast on HCE: heavy sprite file checks can outlive NFC field and cause TagLost.
         return true

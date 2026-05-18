@@ -10,10 +10,8 @@ import com.github.cfogrady.vitalwear.card.ValidatedCardEntityDao
 /**
  * Slimmed-down companion database — holds only validated-card unlock state.
  *
- * Card catalog data (species, transformations, adventures, etc.) has moved exclusively to
- * VBHelper's `internalDb`.  When the companion imports a DIM file it syncs the raw bytes
- * to VBHelper via [com.github.cfogrady.vitalwear.card.VBHelperCardSync], which parses and
- * stores those tables there.
+ * Card catalog data (species, transformations, adventures, etc.) is owned by VBHelper's
+ * `internalDb`. Companion app storage is intentionally limited to validation state.
  *
  * Migration 3 → 4: drop the now-redundant card-catalog tables that were never actually
  * populated in production builds.

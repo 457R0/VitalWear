@@ -20,8 +20,13 @@ class PhoneCommunicationService  : WearableListenerService() {
 
     override fun onMessageReceived(messageEvent: MessageEvent) {
         super.onMessageReceived(messageEvent)
+        Timber.i("Message received from node=${messageEvent.sourceNodeId}, path=${messageEvent.path}, dataBytes=${messageEvent.data?.size ?: 0}")
         if(messageEvent.path==ChannelTypes.SEND_LOGS_REQUEST) {
             val mostRecentLog = TinyLogTree.getMostRecentLogFile(this)
+            if (mostRecentLog == null) {
+                Timber.w("No watch log file available to send")
+                return
+            }
             val channelClient = Wearable.getChannelClient(this)
             CoroutineScope(Dispatchers.IO).launch {
                 val channel = channelClient.openChannel(messageEvent.sourceNodeId, ChannelTypes.LOGS_DATA).await()
@@ -36,6 +41,7 @@ class PhoneCommunicationService  : WearableListenerService() {
 
     override fun onChannelOpened(channel: ChannelClient.Channel) {
         super.onChannelOpened(channel)
+        Timber.i("Channel opened from node=${channel.nodeId}, path=${channel.path}")
         when(channel.path) {
             ChannelTypes.CARD_DATA -> {
                 val cardReceiver = (application as VitalWearApp).cardReceiver
@@ -49,13 +55,21 @@ class PhoneCommunicationService  : WearableListenerService() {
                     Timber.w(it, "Unable to launch card import progress activity")
                 }
                 CoroutineScope(Dispatchers.IO).launch {
-                    val result = cardReceiver.importCardFromChannel(applicationContext, channel)
-                    val notificationChannelManager = (application as VitalWearApp).notificationChannelManager
-                    if(result.success) {
-                        notificationChannelManager.sendGenericNotification(applicationContext, "${result.cardName} Import Successful", "")
-                    } else {
-                        val notificationCardName = result.cardName ?: "Card"
-                        notificationChannelManager.sendGenericNotification(applicationContext, "$notificationCardName Import Failed", "")
+                    runCatching {
+                        cardReceiver.importCardFromChannel(applicationContext, channel)
+                    }.onSuccess { result ->
+                        Timber.i(
+                            "Card import completed from node=${channel.nodeId}, success=${result.success}, cardName=${result.cardName}"
+                        )
+                        val notificationChannelManager = (application as VitalWearApp).notificationChannelManager
+                        if(result.success) {
+                            notificationChannelManager.sendGenericNotification(applicationContext, "${result.cardName} Import Successful", "")
+                        } else {
+                            val notificationCardName = result.cardName ?: "Card"
+                            notificationChannelManager.sendGenericNotification(applicationContext, "$notificationCardName Import Failed", "")
+                        }
+                    }.onFailure {
+                        Timber.e(it, "Card import crashed for node=${channel.nodeId}")
                     }
                 }
             }
@@ -76,7 +90,7 @@ class PhoneCommunicationService  : WearableListenerService() {
                 }
             }
             else -> {
-                Timber.i("Unknown channel: ${channel.path}")
+                Timber.w("Unknown channel path=${channel.path}, node=${channel.nodeId}")
             }
         }
     }

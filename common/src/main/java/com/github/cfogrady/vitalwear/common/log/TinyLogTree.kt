@@ -37,7 +37,7 @@ class TinyLogTree(context: Context): Timber.DebugTree() {
 
         fun getMostRecentLogFile(context: Context): File? {
             val logsDir = getLogsDir(context)
-            return getMostRecentLogFileFromFiles(logsDir.listFiles()!!)
+            return getMostRecentLogFileFromFiles(logsDir.listFiles().orEmpty())
         }
 
         internal fun getMostRecentLogFileFromFiles(files: Array<out File>): File? {
@@ -59,7 +59,7 @@ class TinyLogTree(context: Context): Timber.DebugTree() {
                     }
                 }
             }
-            Log.i("TinyLogTree", "Most Recent Log: $mostRecentFile")
+            Timber.tag("TinyLogTree").i("Most Recent Log: %s", mostRecentFile)
             return mostRecentFile
         }
     }

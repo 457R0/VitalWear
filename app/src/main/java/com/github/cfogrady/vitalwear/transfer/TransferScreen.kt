@@ -130,6 +130,7 @@ fun TransferScreen(controller: TransferScreenController) {
                     VitalWearHceSessionManager.TransferStatus.ARMED_RECEIVE -> stringResource(R.string.transfer_waiting_receive)
                     VitalWearHceSessionManager.TransferStatus.SUCCESS -> stringResource(R.string.transfer_waiting_success)
                     VitalWearHceSessionManager.TransferStatus.FAILURE -> stringResource(R.string.transfer_waiting_failure)
+                    VitalWearHceSessionManager.TransferStatus.SYNCING -> stringResource(R.string.transfer_waiting_preparing)
                     VitalWearHceSessionManager.TransferStatus.IDLE -> stringResource(R.string.transfer_waiting_preparing)
                 }
                 Text(msg)
